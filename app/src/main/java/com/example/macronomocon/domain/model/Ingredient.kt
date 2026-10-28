@@ -1,8 +1,13 @@
 package com.example.macronomocon.domain.model
 
-class Ingredient(
+data class Ingredient(
     val ingredientId: String,
-    var name: String,
-    var barcode: String,
-    var category: String
-)
+    val name: String,
+    val barcode: String = "",
+    val category: String = ""
+) {
+    init {
+        require(ingredientId.isNotBlank()) { "Ingredient ID is required" }
+        require(name.isNotBlank()) { "Ingredient name is required" }
+    }
+}

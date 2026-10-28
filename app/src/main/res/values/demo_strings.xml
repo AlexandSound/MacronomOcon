@@ -1,0 +1,20 @@
+<resources>
+    <string name="demo_name">Alex Morgan</string>
+    <string name="demo_rice">Brown rice</string>
+    <string name="demo_chickpeas">Chickpeas</string>
+    <string name="demo_tomato">Cherry tomatoes</string>
+    <string name="demo_spinach">Baby spinach</string>
+    <string name="demo_lemon">Lemon</string>
+    <string name="demo_oats">Rolled oats</string>
+    <string name="demo_bowl">Golden harvest bowl</string>
+    <string name="demo_salad">Sunshine chickpea salad</string>
+    <string name="demo_rice_recipe">Garden skillet rice</string>
+    <string name="demo_cuisine">Mediterranean</string>
+    <string name="demo_step_rice">Simmer the rice in water until tender, then drain.</string>
+    <string name="demo_step_roast">Warm the chickpeas in a skillet until golden. Halve the tomatoes.</string>
+    <string name="demo_step_bowl">Layer the rice, chickpeas, and tomatoes in a bowl. Serve warm.</string>
+    <string name="demo_step_salad">Rinse the spinach and chickpeas. Halve the tomatoes.</string>
+    <string name="demo_step_toss">Toss everything together and finish with freshly squeezed lemon.</string>
+    <string name="demo_step_skillet">Fold the spinach and tomatoes into the cooked rice until the spinach wilts.</string>
+    <string name="demo_comment">So good for a quick lunch. I warmed the chickpeas first!</string>
+</resources>

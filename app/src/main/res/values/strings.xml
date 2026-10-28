@@ -1,3 +1,29 @@
 <resources>
     <string name="app_name">MacronomOcon</string>
+    <string name="error_load_your_account">Unable to load your account</string>
+    <string name="error_register">Unable to register</string>
+    <string name="error_sign_in">Unable to sign in</string>
+    <string name="error_verify_the_code">Unable to verify the code</string>
+    <string name="error_sign_out">Unable to sign out</string>
+    <string name="error_update_your_account">Unable to update your account</string>
+    <string name="error_save_preferences">Unable to save preferences</string>
+    <string name="error_delete_your_account">Unable to delete your account</string>
+    <string name="error_load_comments">Unable to load comments</string>
+    <string name="error_publish_this_comment">Unable to publish this comment</string>
+    <string name="error_delete_this_comment">Unable to delete this comment</string>
+    <string name="error_like_this_comment">Unable to like this comment</string>
+    <string name="error_load_your_pantry">Unable to load your pantry</string>
+    <string name="error_identify_barcode">Unable to identify this barcode. Search for an ingredient instead.</string>
+    <string name="error_search_ingredients">Unable to search ingredients</string>
+    <string name="error_add_this_pantry_item">Unable to add this pantry item</string>
+    <string name="error_remove_pantry_items">Unable to remove pantry items</string>
+    <string name="error_remove_expired_items">Unable to remove expired items</string>
+    <string name="error_record_this_meal">Unable to record this meal</string>
+    <string name="error_search_recipes">Unable to search recipes</string>
+    <string name="error_retrieve_recipes">Unable to retrieve recipes</string>
+    <string name="error_load_this_recipe">Unable to load this recipe</string>
+    <string name="error_save_this_favorite">Unable to save this favorite</string>
+    <string name="error_block_this_recipe">Unable to block this recipe</string>
+    <string name="error_save_this_recipe">Unable to save this recipe</string>
+    <string name="error_share_this_recipe">Unable to share this recipe</string>
 </resources>

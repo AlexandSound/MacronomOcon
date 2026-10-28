@@ -1,29 +1,23 @@
 package com.example.macronomocon.domain.model
 
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
-
-@OptIn(ExperimentalTime::class)
-class User(
+/** Client profile only. Password verification, OTP, and lockouts belong to the authentication service. */
+data class User(
     val userId: String,
-    var email: String,
-    var passwordHash: String,
-    var displayName: String,
-    var twoFactorEnabled: Boolean,
-    var failedLoginAttempts: Int,
-    var lockedUntil: Instant
+    val email: String,
+    val displayName: String,
+    val twoFactorEnabled: Boolean = false,
+    val preferences: UserPreferences = UserPreferences(),
+    val favoriteRecipeIds: Set<String> = emptySet(),
+    val blockedRecipeIds: Set<String> = emptySet()
 ) {
-    fun validatePassword(pw: String): Boolean = TODO("Validate the password against its hash")
+    init {
+        require(userId.isNotBlank())
+    }
+    fun favorite(r: Recipe): User = copy(favoriteRecipeIds = favoriteRecipeIds + r.recipeId)
 
-    fun recordFailedLogin(): Unit = TODO("Record a failed login attempt")
+    fun unfavorite(r: Recipe): User = copy(favoriteRecipeIds = favoriteRecipeIds - r.recipeId)
 
-    fun isLockedOut(): Boolean = TODO("Check whether the user is locked out")
+    fun block(r: Recipe): User = copy(blockedRecipeIds = blockedRecipeIds + r.recipeId)
 
-    fun favorite(r: Recipe): Unit = TODO("Favorite the recipe")
-
-    fun unfavorite(r: Recipe): Unit = TODO("Remove the recipe from favorites")
-
-    fun block(r: Recipe): Unit = TODO("Block the recipe")
-
-    fun isBlocked(r: Recipe): Boolean = TODO("Check whether the recipe is blocked")
+    fun isBlocked(r: Recipe): Boolean = r.recipeId in blockedRecipeIds
 }

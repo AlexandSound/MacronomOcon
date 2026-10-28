@@ -1,21 +1,43 @@
 package com.example.macronomocon.domain.model
 
-class Recipe(
+data class Recipe(
     val recipeId: String,
-    var name: String,
-    var instructions: List<String>,
-    var prepTime: Int,
-    var cookTime: Int,
-    var difficulty: Difficulty,
-    var mealType: MealType,
-    var cuisine: String,
-    var toolsNeeded: List<String>
+    val name: String,
+    val instructions: List<String>,
+    val prepTime: Int,
+    val cookTime: Int,
+    val difficulty: Difficulty,
+    val mealType: MealType,
+    val cuisine: String,
+    val toolsNeeded: List<String>,
+    val requirements: List<RecipeIngredient> = emptyList()
 ) {
-    fun totalTime(): Int = TODO("Calculate total preparation and cooking time")
+    companion object {
+        /** Recipes with a total time under this many minutes count as quick. */
+        const val QUICK_MAX_MINUTES = 20
+    }
 
-    fun getIngredients(): List<Ingredient> = TODO("Return the recipe ingredients")
+    init {
+        require(prepTime >= 0 && cookTime >= 0)
+        require(prepTime.toLong() + cookTime <= Int.MAX_VALUE)
+    }
 
-    fun matchCount(items: List<PantryItem>): Int = TODO("Count matching pantry items")
+    fun totalTime(): Int = prepTime + cookTime
 
-    fun hasRequiredInfo(): Boolean = TODO("Check required recipe information")
+    fun getIngredients(): List<Ingredient> = requirements.map {
+        it.ingredient
+    }.distinctBy { it.ingredientId }
+
+    fun matchCount(items: List<PantryItem>): Int {
+        val available = items.filter { it.quantity > 0 }.map { it.ingredient.ingredientId }.toSet()
+        return getIngredients().count { it.ingredientId in available }
+    }
+
+    fun isQuick(): Boolean = totalTime() < QUICK_MAX_MINUTES
+
+    fun hasRequiredInfo(): Boolean = recipeId.isNotBlank() &&
+        name.isNotBlank() &&
+        instructions.isNotEmpty() &&
+        instructions.all { it.isNotBlank() } &&
+        requirements.isNotEmpty()
 }
