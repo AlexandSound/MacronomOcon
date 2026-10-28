@@ -1,7 +1,9 @@
 package com.example.macronomocon
 
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -9,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import org.junit.Rule
 import org.junit.Test
@@ -32,7 +35,7 @@ class KitchenNavigationTest {
         compose.onNodeWithText(text(R.string.expiry_label)).performScrollTo().performTextInput("7")
         compose.onNodeWithText(text(R.string.add_to_pantry)).performClick()
         compose.onNodeWithText(text(R.string.nav_recipes)).performClick()
-        compose.onNodeWithText(text(R.string.demo_bowl)).performScrollTo().performClick()
+        scrollToText(R.string.demo_bowl).performClick()
         compose.onNodeWithText(
             text(R.string.ingredients_title)
         ).performScrollTo().assertIsDisplayed()
@@ -40,8 +43,14 @@ class KitchenNavigationTest {
         compose.onNodeWithText(text(R.string.nav_profile)).performClick()
         compose.onNodeWithText(text(R.string.demo_name)).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.browse_saved)).performClick()
-        compose.onNodeWithText(text(R.string.demo_salad)).performScrollTo().assertIsDisplayed()
+        scrollToText(R.string.demo_salad).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.nav_kitchen)).performClick()
-        compose.onNodeWithText(text(R.string.demo_bowl)).performScrollTo().assertIsDisplayed()
+        scrollToText(R.string.demo_bowl).assertIsDisplayed()
+    }
+
+    /** Lazy lists compose only visible rows, so scroll the list itself until the row exists. */
+    private fun scrollToText(id: Int): SemanticsNodeInteraction {
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text(id)))
+        return compose.onNodeWithText(text(id))
     }
 }

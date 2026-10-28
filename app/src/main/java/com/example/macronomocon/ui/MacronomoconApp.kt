@@ -3,12 +3,22 @@ package com.example.macronomocon.ui
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
@@ -33,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -74,6 +85,7 @@ fun MacronomoconApp(container: AppContainer) {
     val recipeState by recipes.uiState.collectAsStateWithLifecycle()
     val kitchenRecipeState by kitchenRecipes.uiState.collectAsStateWithLifecycle()
     val accountState by account.uiState.collectAsStateWithLifecycle()
+    val favoriteIds = accountState.data.user?.favoriteRecipeIds.orEmpty()
     val commentState by comments.uiState.collectAsStateWithLifecycle()
     var destination by rememberSaveable { mutableStateOf(Destination.KITCHEN) }
     var filter by rememberSaveable { mutableStateOf(RecipeFilter.ALL) }
@@ -124,101 +136,112 @@ fun MacronomoconApp(container: AppContainer) {
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
                 KitchenTopBar(showBack = detailKey != null, onBack = { detailKey = null })
-                if (detailKey != null) {
-                    StateFeedback(recipeState, recipes::clearError)
-                    StateFeedback(pantryState, pantry::clearError)
-                    val recipe = recipeState.data.selectedRecipe?.takeIf {
-                        it.recipeId ==
-                            detailKey
-                    }
-                    if (recipe != null) {
-                        RecipeDetailScreen(
-                            recipe, pantryState.data.items, accountState.data.user, commentState,
-                            recipeState.isLoading || pantryState.isLoading,
-                            onFavorite = {
-                                scope.launch {
-                                    recipes.setFavorite(
-                                        recipe,
-                                        recipe.recipeId !in
-                                            accountState.data.user?.favoriteRecipeIds.orEmpty()
-                                    ).join()
-                                    account.loadAccount()
-                                }
-                            },
-                            onCook = {
-                                scope.launch {
-                                    pantry.recordMeal(recipe).join()
-                                    if (pantry.uiState.value.errorMessage == null) {
-                                        recommendations()
-                                        snackbar.showSnackbar(
-                                            mealRecordedMessage
-                                        )
-                                    }
-                                }
-                            },
-                            onPublish = {
-                                comments.publishComment(it).join()
-                                comments.uiState.value.errorMessage == null
-                            }, onLike = { comments.likeComment(it) },
-                            onDelete = {
-                                comments.deleteComment(it)
-                            }, onDismissError = comments::clearError
-                        )
-                    }
-                } else {
-                    savedTabs.SaveableStateProvider(destination) {
-                        when (destination) {
-                            Destination.KITCHEN -> KitchenScreen(
-                                pantryState.data.items,
-                                kitchenRecipeState,
-                                kitchenRecipes::clearError,
-                                { navigate(Destination.PANTRY) },
-                                { navigate(Destination.RECIPES) },
-                                ::openRecipe
-                            )
-                            Destination.PANTRY -> PantryScreen(pantryState, {
-                                pantry.beginAdding()
-                                showAdd = true
-                            }, { id ->
-                                scope.launch {
-                                    pantry.removeSelected(setOf(id)).join()
-                                    recommendations()
-                                }
-                            }, pantry::clearError)
-                            Destination.RECIPES -> RecipesScreen(
-                                recipeState,
-                                pantryState.data.items,
-                                accountState.data.user?.favoriteRecipeIds.orEmpty(),
-                                filter,
-                                {
-                                    filter = it
-                                    if (it == RecipeFilter.SAVED) {
-                                        recipes.loadSaved(
-                                            accountState.data.user?.favoriteRecipeIds.orEmpty()
-                                        )
-                                    } else {
-                                        recommendations()
-                                    }
-                                },
-                                {
-                                    if (it.isBlank()) recommendations() else recipes.search(it)
-                                },
-                                ::openRecipe,
-                                recipes::clearError
-                            )
-                            Destination.PROFILE -> ProfileScreen(accountState, { enabled ->
-                                accountState.data.user?.let {
-                                    account.updatePreferences(
-                                        it.preferences.copy(notificationsEnabled = enabled)
-                                    )
-                                }
-                            }, {
-                                filter = RecipeFilter.SAVED
-                                navigate(Destination.RECIPES)
-                                recipes.loadSaved(
-                                    accountState.data.user?.favoriteRecipeIds.orEmpty()
+                AnimatedContent(
+                    targetState = Screen(destination, detailKey),
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = { screenTransition() },
+                    label = "screen"
+                ) { screen ->
+                    if (screen.recipeId != null) {
+                        Column(Modifier.fillMaxSize()) {
+                            StateFeedback(recipeState, recipes::clearError)
+                            StateFeedback(pantryState, pantry::clearError)
+                            val recipe = recipeState.data.selectedRecipe?.takeIf {
+                                it.recipeId ==
+                                    screen.recipeId
+                            }
+                            if (recipe != null) {
+                                RecipeDetailScreen(
+                                    recipe,
+                                    pantryState.data.items,
+                                    accountState.data.user,
+                                    commentState,
+                                    recipeState.isLoading || pantryState.isLoading,
+                                    onFavorite = {
+                                        scope.launch {
+                                            recipes.setFavorite(
+                                                recipe,
+                                                recipe.recipeId !in favoriteIds
+                                            ).join()
+                                            account.loadAccount()
+                                        }
+                                    },
+                                    onCook = {
+                                        scope.launch {
+                                            pantry.recordMeal(recipe).join()
+                                            if (pantry.uiState.value.errorMessage == null) {
+                                                recommendations()
+                                                snackbar.showSnackbar(
+                                                    mealRecordedMessage
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onPublish = {
+                                        comments.publishComment(it).join()
+                                        comments.uiState.value.errorMessage == null
+                                    }, onLike = { comments.likeComment(it) },
+                                    onDelete = {
+                                        comments.deleteComment(it)
+                                    }, onDismissError = comments::clearError
                                 )
-                            }, account::clearError)
+                            }
+                        }
+                    } else {
+                        savedTabs.SaveableStateProvider(screen.destination) {
+                            when (screen.destination) {
+                                Destination.KITCHEN -> KitchenScreen(
+                                    pantryState.data.items,
+                                    kitchenRecipeState,
+                                    kitchenRecipes::clearError,
+                                    { navigate(Destination.PANTRY) },
+                                    { navigate(Destination.RECIPES) },
+                                    ::openRecipe
+                                )
+                                Destination.PANTRY -> PantryScreen(pantryState, {
+                                    pantry.beginAdding()
+                                    showAdd = true
+                                }, { id ->
+                                    scope.launch {
+                                        pantry.removeSelected(setOf(id)).join()
+                                        recommendations()
+                                    }
+                                }, pantry::clearError)
+                                Destination.RECIPES -> RecipesScreen(
+                                    recipeState,
+                                    pantryState.data.items,
+                                    accountState.data.user?.favoriteRecipeIds.orEmpty(),
+                                    filter,
+                                    {
+                                        filter = it
+                                        if (it == RecipeFilter.SAVED) {
+                                            recipes.loadSaved(
+                                                accountState.data.user?.favoriteRecipeIds.orEmpty()
+                                            )
+                                        } else {
+                                            recommendations()
+                                        }
+                                    },
+                                    {
+                                        if (it.isBlank()) recommendations() else recipes.search(it)
+                                    },
+                                    ::openRecipe,
+                                    recipes::clearError
+                                )
+                                Destination.PROFILE -> ProfileScreen(accountState, { enabled ->
+                                    accountState.data.user?.let {
+                                        account.updatePreferences(
+                                            it.preferences.copy(notificationsEnabled = enabled)
+                                        )
+                                    }
+                                }, {
+                                    filter = RecipeFilter.SAVED
+                                    navigate(Destination.RECIPES)
+                                    recipes.loadSaved(
+                                        accountState.data.user?.favoriteRecipeIds.orEmpty()
+                                    )
+                                }, account::clearError)
+                            }
                         }
                     }
                 }
@@ -251,25 +274,51 @@ fun MacronomoconApp(container: AppContainer) {
     }
 }
 
-/** Child of the app shell: shows back navigation only when the shell says a detail view is open. */
+/** What the shell's content area shows; [AnimatedContent] animates between these states. */
+private data class Screen(val destination: Destination, val recipeId: String? = null) {
+    companion object {
+        const val SLIDE_MILLIS = 320
+        const val FADE_MILLIS = 220
+        const val TOP_BAR_HEIGHT_DP = 56
+
+        /** Tabs slide a quarter of the width; recipe details slide in from the full width. */
+        const val TAB_SLIDE_DIVISOR = 4
+    }
+}
+
+/** Details push in from the end and pop back out; tabs slide toward their position in the bar. */
+private fun AnimatedContentTransitionScope<Screen>.screenTransition(): ContentTransform {
+    val slide = tween<IntOffset>(Screen.SLIDE_MILLIS, easing = FastOutSlowInEasing)
+    val fade = tween<Float>(Screen.FADE_MILLIS)
+    val opening = initialState.recipeId == null && targetState.recipeId != null
+    val closing = initialState.recipeId != null && targetState.recipeId == null
+    val forward = when {
+        opening -> true
+        closing -> false
+        else -> targetState.destination.ordinal >= initialState.destination.ordinal
+    }
+    val sign = if (forward) 1 else -1
+    val divisor = if (opening || closing) 1 else Screen.TAB_SLIDE_DIVISOR
+    // Every view fills the same area, so no size animation (which would shift the layout) is used.
+    return (slideInHorizontally(slide) { sign * it / divisor } + fadeIn(fade)) togetherWith
+        (slideOutHorizontally(slide) { -sign * it / divisor } + fadeOut(fade)) using null
+}
+
+/**
+ * Child of the app shell. Its height is reserved on every view, so showing or hiding the back
+ * button never moves the content below it.
+ */
 @Composable
 private fun KitchenTopBar(showBack: Boolean, onBack: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+    Box(
+        Modifier.fillMaxWidth().height(Screen.TOP_BAR_HEIGHT_DP.dp).padding(horizontal = 4.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        if (showBack) {
+        AnimatedVisibility(showBack, enter = fadeIn(), exit = fadeOut()) {
             IconButton(onClick = onBack) {
                 Icon(painterResource(R.drawable.ic_back), stringResource(R.string.back))
             }
         }
-        Text(
-            stringResource(R.string.demo_badge),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.padding(vertical = 10.dp)
-        )
     }
 }
 
