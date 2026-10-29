@@ -240,7 +240,10 @@ fun MacronomoconApp(container: AppContainer) {
                                     recipes.loadSaved(
                                         accountState.data.user?.favoriteRecipeIds.orEmpty()
                                     )
-                                }, account::clearError)
+                                }, account::clearError,
+                                    onLogOut = { account.logOut() },
+                                    onDeleteAccount = { account.deleteAccount() }
+                                )                            
                             }
                         }
                     }

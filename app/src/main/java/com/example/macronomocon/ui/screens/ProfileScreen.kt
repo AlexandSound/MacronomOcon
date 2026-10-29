@@ -8,11 +8,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -32,9 +38,12 @@ fun ProfileScreen(
     state: ViewState<AccountState>,
     onNotifications: (Boolean) -> Unit,
     onSaved: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onLogOut: () -> Unit,
+    onDeleteAccount: () -> Unit
 ) {
     val user = state.data.user
+    var confirmDeletion by rememberSaveable(user?.userId) { mutableStateOf(false) }
     LazyColumn(
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -84,6 +93,26 @@ fun ProfileScreen(
                     onNotifications
                 )
             }
+            item {
+                WarmButton(
+                    stringResource(R.string.log_out),
+                    onLogOut,
+                    Modifier.fillMaxWidth(),
+                    enabled = !state.isLoading
+                )
+            }
+            item {
+                TextButton(
+                    onClick = { confirmDeletion = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isLoading
+                ) {
+                    Text(
+                        stringResource(R.string.delete_account),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
         item {
             Surface(
@@ -99,6 +128,29 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+    if (confirmDeletion && user != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDeletion = false },
+            title = { Text(stringResource(R.string.delete_account_confirmation_title)) },
+            text = { Text(stringResource(R.string.delete_account_confirmation_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeletion = false
+                    onDeleteAccount()
+                }, enabled = !state.isLoading) {
+                    Text(
+                        stringResource(R.string.delete_account),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirmDeletion = false
+                }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
     }
 }
 
