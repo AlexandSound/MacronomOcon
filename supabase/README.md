@@ -36,10 +36,17 @@ not prove hosted Auth settings were changed.
 ## Spoonacular Edge Function
 
 `functions/spoonacular/index.ts` is the only place the Spoonacular key is used. It requires a
-signed-in user's access token, forwards five allowlisted actions (`search`,
-`findByIngredients`, `recipe`, `ingredients`, `upc`) with bounded inputs and at most 10
-results, and maps an exhausted daily quota (Spoonacular 402) to 429. Responses are not stored.
-The Android `SpoonacularApiClient` calls it through `supabase.functions`.
+signed-in user's access token, forwards six allowlisted actions (`search`,
+`findByIngredients`, `recipe`, `recipes` (bulk, up to 20 IDs), `ingredients`, `upc`) with
+bounded inputs and at most 10 results, and maps an exhausted daily quota (Spoonacular 402) to
+429. Responses are not stored server-side. The Android `SpoonacularApiClient` calls it through
+`supabase.functions`.
+
+Quota: the Free plan allows 50 points/day and 1 request/second; a recipe search with
+ingredients and instructions costs about 1.6 points. `CachingRecipeApiClient` keeps results in
+memory for up to an hour (Spoonacular allows only temporary caching), runs recipe calls one at
+a time so Kitchen and Recipes share one search, reuses search results when a recipe is opened,
+and loads saved recipes with one bulk call. Redeploy the function after changing it.
 
 Set the key as a project secret (never in `local.properties` or the APK), then deploy:
 

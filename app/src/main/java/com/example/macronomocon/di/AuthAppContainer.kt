@@ -3,6 +3,7 @@ package com.example.macronomocon.di
 import android.content.Context
 import android.content.Intent
 import com.example.macronomocon.BuildConfig
+import com.example.macronomocon.data.api.CachingRecipeApiClient
 import com.example.macronomocon.data.local.LocalCommentRepository
 import com.example.macronomocon.data.local.LocalPantryRepository
 import com.example.macronomocon.data.repository.AccountRepository
@@ -54,13 +55,31 @@ class AuthAppContainer(private val context: Context) : AppContainer {
     }
     private val spoonacular by lazy { SpoonacularApiClient(client) }
 
-    override val accounts: AccountRepository by lazy { SupabaseAccountRepository(client) }
-    override val ingredients by lazy { IngredientRepository(spoonacular) }
-    override val recipes by lazy { RecipeRepository(spoonacular, SupabaseRecipeUserData(client)) }
-    override val pantry: PantryRepository = LocalPantryRepository()
-    override val comments: CommentRepository = LocalCommentRepository {
+    // Scoped to the signed-in user and cleared on sign-out, so accounts never share local data.
+    private val localPantry = LocalPantryRepository { client.auth.currentUserOrNull()?.id }
+    private val localComments = LocalCommentRepository {
         client.auth.currentUserOrNull()?.let { User(it.id, it.email.orEmpty(), it.email.orEmpty()) }
     }
+
+    override val accounts: AccountRepository by lazy {
+        val remote = SupabaseAccountRepository(client)
+        object : AccountRepository by remote {
+            override suspend fun signOut() {
+                try {
+                    remote.signOut()
+                } finally {
+                    localPantry.clear()
+                    localComments.clear()
+                }
+            }
+        }
+    }
+    override val ingredients by lazy { IngredientRepository(spoonacular) }
+    override val recipes by lazy {
+        RecipeRepository(CachingRecipeApiClient(spoonacular), SupabaseRecipeUserData(client))
+    }
+    override val pantry: PantryRepository = localPantry
+    override val comments: CommentRepository = localComments
 
     override fun barcodeScanner(): BarcodeScanner = GoogleCodeScanner(context)
 

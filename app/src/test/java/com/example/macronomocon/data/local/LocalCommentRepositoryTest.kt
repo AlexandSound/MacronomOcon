@@ -19,6 +19,16 @@ class LocalCommentRepositoryTest {
         assertTrue(comments.findByRecipe("716429").isEmpty())
     }
 
+    @Test
+    fun commentsAreNotSharedBetweenAccountsAndClearRemovesThem() = runTest {
+        comments.publish("716429", "Great", null)
+        user = User("someone-else", "b@example.com", "B")
+        assertTrue(comments.findByRecipe("716429").isEmpty())
+        user = User("supabase-user", "a@example.com", "A")
+        comments.clear()
+        assertTrue(comments.findByRecipe("716429").isEmpty())
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun otherUsersCannotDelete() = runTest {
         val comment = comments.publish("716429", "Great", null)

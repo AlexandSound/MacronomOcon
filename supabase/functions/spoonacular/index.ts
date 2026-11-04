@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const API = "https://api.spoonacular.com";
 const MAX_RESULTS = 10;
 const MAX_INGREDIENTS = 20;
+const MAX_BULK_IDS = 20;
 const MAX_TEXT = 100;
 
 // One Spoonacular call per request; complexSearch also returns ingredients and instructions.
@@ -21,6 +22,7 @@ type Body = {
   query?: string;
   ingredients?: string[];
   id?: string;
+  ids?: string[];
   upc?: string;
 };
 
@@ -56,6 +58,13 @@ function route(body: Body): [string, Record<string, string>] | null {
       return /^[0-9]{1,10}$/.test(body.id ?? "")
         ? [`/recipes/${body.id}/information`, { includeNutrition: "false" }]
         : null;
+    case "recipes": {
+      // informationBulk: one call for several saved recipes.
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+      if (ids.length === 0 || ids.length > MAX_BULK_IDS) return null;
+      if (!ids.every((id) => typeof id === "string" && /^[0-9]{1,10}$/.test(id))) return null;
+      return ["/recipes/informationBulk", { ids: ids.join(","), includeNutrition: "false" }];
+    }
     case "ingredients": {
       const query = text(body.query);
       return query
@@ -106,5 +115,7 @@ Deno.serve(async (req) => {
   if (upstream.status === 402) return json({ error: "quota_exceeded" }, 429);
   if (upstream.status === 404) return json({ error: "not_found" }, 404);
   if (!upstream.ok) return json({ error: "upstream_error" }, 502);
-  return json(await upstream.json());
+  // Bulk endpoints return an array; wrap it so every response is an object.
+  const data = await upstream.json();
+  return json(Array.isArray(data) ? { results: data } : data);
 });

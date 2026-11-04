@@ -23,6 +23,9 @@ class SpoonacularApiClient(private val client: SupabaseClient) :
     IngredientApiClient {
     companion object {
         const val FUNCTION = "spoonacular"
+
+        /** Matches the Edge Function's limit for one `recipes` (informationBulk) call. */
+        const val MAX_BULK_IDS = 20
     }
 
     override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> =
@@ -37,6 +40,13 @@ class SpoonacularApiClient(private val client: SupabaseClient) :
 
     override suspend fun getRecipe(recipeId: String): Recipe =
         SpoonacularMapper.recipe(call("recipe") { put("id", recipeId) })
+
+    override suspend fun getRecipes(recipeIds: List<String>): List<Recipe> =
+        recipeIds.chunked(MAX_BULK_IDS).flatMap { ids ->
+            SpoonacularMapper.recipes(
+                call("recipes") { put("ids", JsonArray(ids.map(::JsonPrimitive))) }
+            )
+        }
 
     override suspend fun searchIngredients(query: String): List<Ingredient> =
         SpoonacularMapper.ingredients(call("ingredients") { put("query", query) })
