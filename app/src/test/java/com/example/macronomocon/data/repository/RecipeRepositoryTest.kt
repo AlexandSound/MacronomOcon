@@ -39,18 +39,33 @@ class RecipeRepositoryTest {
         override suspend fun createShareLink(recipeId: String): String =
             "https://example.com/recipes/$recipeId"
     }
+    private val repository = RecipeRepository(api, storage)
 
     @Test
-    fun ingredientRecommendationsDeduplicateInputAndExcludeBlockedRecipes() = runTest {
-        val repository = RecipeRepository(api, storage)
-        assertEquals(listOf(allowed), repository.findByIngredients(listOf(rice, rice)))
+    fun duplicateIngredientsAreSentToTheApiOnce() = runTest {
+        repository.findByIngredients(listOf(rice, rice))
         assertEquals(listOf(rice), received)
     }
 
     @Test
-    fun emptyIngredientSelectionDoesNotCallRecipeApi() = runTest {
-        val repository = RecipeRepository(api, storage)
+    fun blockedRecipesAreExcludedFromRecommendations() = runTest {
+        val recommendations = repository.findByIngredients(listOf(rice))
+        assertFalse(blocked in recommendations)
+    }
+
+    @Test
+    fun duplicateRecipesAreRecommendedOnce() = runTest {
+        assertEquals(listOf(allowed), repository.findByIngredients(listOf(rice)))
+    }
+
+    @Test
+    fun anEmptyIngredientSelectionRecommendsNothing() = runTest {
         assertTrue(repository.findByIngredients(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun anEmptyIngredientSelectionDoesNotCallTheApi() = runTest {
+        repository.findByIngredients(emptyList())
         assertEquals(0, requestCount)
     }
 }

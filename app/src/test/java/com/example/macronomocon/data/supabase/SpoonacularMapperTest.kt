@@ -5,14 +5,13 @@ import com.example.macronomocon.domain.model.MealType
 import com.example.macronomocon.domain.model.PantryItem
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 class SpoonacularMapperTest {
     private fun json(text: String) = Json.parseToJsonElement(text).jsonObject
 
-    private val recipe = """
+    private val recipeJson = """
         {
           "id": 716429, "title": "Pasta with Garlic", "readyInMinutes": 45,
           "preparationMinutes": -1, "cookingMinutes": null,
@@ -32,58 +31,137 @@ class SpoonacularMapperTest {
         }
     """.trimIndent()
 
+    private val recipe = SpoonacularMapper.recipe(json(recipeJson))
+
     @Test
-    fun mapsRecipeInformation() {
-        val mapped = SpoonacularMapper.recipe(json(recipe))
-        assertEquals("716429", mapped.recipeId)
-        assertEquals("Pasta with Garlic", mapped.name)
-        assertEquals(listOf("Boil the pasta.", "Add garlic."), mapped.instructions)
-        assertEquals(0, mapped.prepTime)
-        assertEquals(45, mapped.cookTime)
-        assertEquals(Difficulty.MEDIUM, mapped.difficulty)
-        assertEquals(MealType.LUNCH, mapped.mealType)
-        assertEquals("Italian", mapped.cuisine)
-        assertEquals(listOf("pot", "pan"), mapped.toolsNeeded)
+    fun mapsTheRecipeId() {
+        assertEquals("716429", recipe.recipeId)
     }
 
     @Test
-    fun usesMetricMeasuresAndSkipsUnusableIngredients() {
-        val requirements = SpoonacularMapper.recipe(json(recipe)).requirements
-        assertEquals(listOf("11215", "20420"), requirements.map { it.ingredient.ingredientId })
-        assertEquals(PantryItem.UNIT_PIECE, requirements[0].unit)
-        assertEquals("g", requirements[1].unit)
-        assertEquals(226.796, requirements[1].quantity, 0.0)
-        assertEquals("Produce", requirements[0].ingredient.category)
+    fun mapsTheRecipeTitle() {
+        assertEquals("Pasta with Garlic", recipe.name)
     }
 
     @Test
-    fun skipsMalformedSearchResults() {
+    fun flattensAnalyzedInstructionStepsIntoInstructions() {
+        assertEquals(listOf("Boil the pasta.", "Add garlic."), recipe.instructions)
+    }
+
+    @Test
+    fun treatsNegativePreparationMinutesAsNoPrepTime() {
+        assertEquals(0, recipe.prepTime)
+    }
+
+    @Test
+    fun derivesCookTimeFromReadyMinutesWhenCookingMinutesIsMissing() {
+        assertEquals(45, recipe.cookTime)
+    }
+
+    @Test
+    fun derivesDifficultyFromTheTotalTime() {
+        assertEquals(Difficulty.MEDIUM, recipe.difficulty)
+    }
+
+    @Test
+    fun derivesMealTypeFromDishTypes() {
+        assertEquals(MealType.LUNCH, recipe.mealType)
+    }
+
+    @Test
+    fun usesTheFirstCuisineAsTheRecipeCuisine() {
+        assertEquals("Italian", recipe.cuisine)
+    }
+
+    @Test
+    fun collectsDistinctStepEquipmentAsToolsNeeded() {
+        assertEquals(listOf("pot", "pan"), recipe.toolsNeeded)
+    }
+
+    @Test
+    fun skipsIngredientsWithoutAPositiveId() {
+        assertFalse("-1" in recipe.requirements.map { it.ingredient.ingredientId })
+    }
+
+    @Test
+    fun skipsIngredientsWithoutAPositiveAmount() {
+        assertFalse("1002030" in recipe.requirements.map { it.ingredient.ingredientId })
+    }
+
+    @Test
+    fun keepsUsableIngredientsInOrder() {
+        assertEquals(
+            listOf("11215", "20420"),
+            recipe.requirements.map { it.ingredient.ingredientId }
+        )
+    }
+
+    @Test
+    fun usesTheMetricAmountRatherThanTheOriginalAmount() {
+        assertEquals(226.796, recipe.requirements[1].quantity, 0.0)
+    }
+
+    @Test
+    fun usesTheMetricUnitRatherThanTheOriginalUnit() {
+        assertEquals("g", recipe.requirements[1].unit)
+    }
+
+    @Test
+    fun treatsABlankMetricUnitAsACount() {
+        assertEquals(PantryItem.UNIT_PIECE, recipe.requirements[0].unit)
+    }
+
+    @Test
+    fun mapsTheIngredientAisleToItsCategory() {
+        assertEquals("Produce", recipe.requirements[0].ingredient.category)
+    }
+
+    @Test
+    fun skipsSearchResultsThatCannotBeMapped() {
         val results = SpoonacularMapper.recipes(
             json("""{"results": [{"id": 1, "title": "Toast"}, {"title": "No id"}]}""")
         )
         assertEquals(listOf("1"), results.map { it.recipeId })
+    }
+
+    @Test
+    fun searchResultsCarryNoIngredientRequirements() {
+        val results = SpoonacularMapper.recipes(
+            json("""{"results": [{"id": 1, "title": "Toast"}]}""")
+        )
         assertTrue(results.single().requirements.isEmpty())
     }
 
     @Test
-    fun mapsIngredientSearchWithBarcode() {
+    fun skipsIngredientResultsWithoutAName() {
         val results = SpoonacularMapper.ingredients(
             json("""{"results": [{"id": 9003, "name": "apple", "aisle": "Produce"}, {"id": 2}]}"""),
             "0123456789012"
         )
-        assertEquals(1, results.size)
-        assertEquals("9003", results[0].ingredientId)
-        assertEquals("0123456789012", results[0].barcode)
+        assertEquals(listOf("9003"), results.map { it.ingredientId })
     }
 
     @Test
-    fun productSearchTermPrefersGenericBreadcrumb() {
+    fun attachesTheScannedBarcodeToIngredientResults() {
+        val results = SpoonacularMapper.ingredients(
+            json("""{"results": [{"id": 9003, "name": "apple", "aisle": "Produce"}]}"""),
+            "0123456789012"
+        )
+        assertEquals("0123456789012", results.single().barcode)
+    }
+
+    @Test
+    fun productSearchTermPrefersTheMostGenericBreadcrumb() {
         assertEquals(
             "brown rice",
             SpoonacularMapper.productSearchTerm(
                 json("""{"title": "Brown Rice 2lb", "breadcrumbs": ["brown rice", "rice"]}""")
             )
         )
+    }
+
+    @Test
+    fun productSearchTermFallsBackToTheProductTitle() {
         assertEquals(
             "Oat Milk",
             SpoonacularMapper.productSearchTerm(

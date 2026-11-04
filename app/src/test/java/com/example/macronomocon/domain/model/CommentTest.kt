@@ -4,16 +4,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CommentTest {
+    private val author = User("author", "author@example.com", "Author")
+    private val reader = User("reader", "reader@example.com", "Reader")
+    private val comment = Comment("comment", "recipe", author.userId, "Helpful recipe")
+
     @Test
-    fun sameUserCannotIncreaseLikeCountTwice() {
-        val author = User("author", "author@example.com", "Author")
-        val reader = User("reader", "reader@example.com", "Reader")
-        val comment =
-            Comment("comment", "recipe", author.userId, "Helpful recipe")
-        val liked = comment.like(reader).like(reader)
-        assertEquals(1, liked.likeCount())
+    fun likeFromANewReaderIncrementsTheLikeCount() {
+        assertEquals(1, comment.like(reader).likeCount())
+    }
+
+    @Test
+    fun repeatedLikesFromTheSameReaderCountOnce() {
+        assertEquals(1, comment.like(reader).like(reader).likeCount())
+    }
+
+    @Test
+    fun likeLeavesTheOriginalCommentUnchanged() {
+        comment.like(reader)
         assertEquals(0, comment.likeCount())
-        assertTrue(liked.isAuthor(author))
-        assertFalse(liked.isAuthor(reader))
+    }
+
+    @Test
+    fun isAuthorRecognizesTheCommentAuthor() {
+        assertTrue(comment.isAuthor(author))
+    }
+
+    @Test
+    fun isAuthorRejectsOtherUsers() {
+        assertFalse(comment.isAuthor(reader))
+    }
+
+    @Test
+    fun likingPreservesTheOriginalAuthor() {
+        assertTrue(comment.like(reader).isAuthor(author))
     }
 }

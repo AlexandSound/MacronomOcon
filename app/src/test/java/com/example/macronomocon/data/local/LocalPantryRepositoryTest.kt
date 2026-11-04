@@ -2,10 +2,10 @@ package com.example.macronomocon.data.local
 
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.PantryItem
+import com.example.macronomocon.testing.assertThrows
 import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 class LocalPantryRepositoryTest {
@@ -21,24 +21,41 @@ class LocalPantryRepositoryTest {
     )
 
     @Test
-    fun eachAccountHasItsOwnPantry() = runTest {
+    fun itemsAddedByOneAccountAreNotVisibleToAnother() = runTest {
         pantry.addItem(item("a-rice"))
         userId = "user-b"
         assertTrue(pantry.findPantry().items.isEmpty())
+    }
+
+    @Test
+    fun anAccountKeepsItsItemsAcrossAccountSwitches() = runTest {
+        pantry.addItem(item("a-rice"))
+        userId = "user-b"
+        pantry.findPantry()
         userId = "user-a"
         assertEquals(listOf("a-rice"), pantry.findPantry().items.map { it.pantryItemId })
     }
 
     @Test
-    fun clearRemovesEveryAccountsItems() = runTest {
+    fun clearRemovesTheSignedInAccountsItems() = runTest {
         pantry.addItem(item("a-rice"))
         pantry.clear()
         assertTrue(pantry.findPantry().items.isEmpty())
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun requiresSignedInUser() = runTest {
+    @Test
+    fun clearRemovesOtherAccountsItemsToo() = runTest {
+        pantry.addItem(item("a-rice"))
+        userId = "user-b"
+        pantry.addItem(item("b-rice"))
+        pantry.clear()
+        userId = "user-a"
+        assertTrue(pantry.findPantry().items.isEmpty())
+    }
+
+    @Test
+    fun readingThePantryRequiresASignedInUser() = runTest {
         userId = null
-        pantry.findPantry()
+        assertThrows<IllegalArgumentException> { pantry.findPantry() }
     }
 }

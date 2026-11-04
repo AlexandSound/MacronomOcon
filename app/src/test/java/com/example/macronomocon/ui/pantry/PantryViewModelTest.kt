@@ -15,7 +15,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -44,6 +43,22 @@ class PantryViewModelTest {
         override suspend fun recordMeal(recipe: Recipe): Pantry =
             pantry.also { it.deductIngredients(recipe) }
     }
+    private val scanner = object : BarcodeScanner {
+        override suspend fun scan(): String = ingredient.barcode
+    }
+
+    private fun viewModel(barcodeScanner: BarcodeScanner? = null) =
+        PantryViewModel(repository, IngredientRepository(api), barcodeScanner)
+
+    private fun stockItem() = PantryItem(ingredient, 100.0, "g", LocalDate.now().plusDays(2))
+
+    /** [PantryViewModel.selectIngredient] only accepts ingredients in the current results. */
+    private suspend fun viewModelWithSelection(
+        barcodeScanner: BarcodeScanner? = null
+    ): PantryViewModel = viewModel(barcodeScanner).also {
+        it.searchIngredients("rice").join()
+        it.selectIngredient(ingredient)
+    }
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -52,85 +67,173 @@ class PantryViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun failedBarcodeLookupAllowsSearchSelectionAndConfirmation() = runTest(dispatcher) {
+    fun aFailedBarcodeLookupFallsBackToIngredientSearch() = runTest(dispatcher) {
         lookup = { throw IOException("offline") }
-        val vm = PantryViewModel(repository, IngredientRepository(api))
-        vm.identifyBarcode(ingredient.barcode)
-        advanceUntilIdle()
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertTrue(vm.uiState.value.data.showIngredientSearch)
+    }
+
+    @Test
+    fun aFailedBarcodeLookupReportsTheError() = runTest(dispatcher) {
+        lookup = { throw IOException("offline") }
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertEquals(UiMessage.ERROR_IDENTIFY_BARCODE, vm.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun aFailedBarcodeLookupStopsLoading() = runTest(dispatcher) {
+        lookup = { throw IOException("offline") }
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertFalse(vm.uiState.value.isLoading)
-        vm.searchIngredients("rice")
-        advanceUntilIdle()
-        vm.selectIngredient(ingredient)
-        val item =
-            PantryItem(ingredient, 100.0, "g", LocalDate.now().plusDays(2))
-        vm.confirmAdd(item)
-        advanceUntilIdle()
+    }
+
+    @Test
+    fun aConfirmedItemIsAddedToThePantry() = runTest(dispatcher) {
+        val item = stockItem()
+        val vm = viewModelWithSelection()
+        vm.confirmAdd(item).join()
         assertEquals(listOf(item), vm.uiState.value.data.items)
+    }
+
+    @Test
+    fun confirmingAnItemClearsTheSelectedIngredient() = runTest(dispatcher) {
+        val vm = viewModelWithSelection()
+        vm.confirmAdd(stockItem()).join()
         assertNull(vm.uiState.value.data.selectedIngredient)
+    }
+
+    @Test
+    fun confirmingAnItemClearsAnEarlierError() = runTest(dispatcher) {
+        lookup = { throw IOException("offline") }
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
+        vm.searchIngredients("rice").join()
+        vm.selectIngredient(ingredient)
+        vm.confirmAdd(stockItem()).join()
         assertNull(vm.uiState.value.errorMessage)
     }
 
     @Test
-    fun missingOrUnmatchedCodeEnablesFallback() = runTest(dispatcher) {
-        val vm = PantryViewModel(repository, IngredientRepository(api))
-        vm.identifyBarcode(null)
-        advanceUntilIdle()
+    fun aMissingBarcodeFallsBackToIngredientSearch() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.identifyBarcode(null).join()
         assertTrue(vm.uiState.value.data.showIngredientSearch)
+    }
+
+    @Test
+    fun anUnmatchedBarcodeFallsBackToIngredientSearch() = runTest(dispatcher) {
         lookup = { emptyList() }
-        vm.identifyBarcode(ingredient.barcode)
-        advanceUntilIdle()
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertTrue(vm.uiState.value.data.showIngredientSearch)
+    }
+
+    @Test
+    fun anUnmatchedBarcodeIsNotReportedAsAnError() = runTest(dispatcher) {
+        lookup = { emptyList() }
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertNull(vm.uiState.value.errorMessage)
     }
 
     @Test
-    fun successfulLookupWaitsForConfirmationBeforeAddingStock() = runTest(dispatcher) {
-        val vm = PantryViewModel(repository, IngredientRepository(api))
-        vm.identifyBarcode(ingredient.barcode)
-        advanceUntilIdle()
+    fun aSuccessfulLookupShowsTheMatchedIngredients() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertEquals(listOf(ingredient), vm.uiState.value.data.searchResults)
+    }
+
+    @Test
+    fun aSuccessfulLookupDoesNotAddStockBeforeConfirmation() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertTrue(pantry.items.isEmpty())
+    }
+
+    @Test
+    fun aSuccessfulLookupDoesNotFallBackToIngredientSearch() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertFalse(vm.uiState.value.data.showIngredientSearch)
     }
 
     @Test
-    fun cancellationIsNotReportedAsScanFailure() = runTest(dispatcher) {
+    fun aCancelledLookupIsNotReportedAsAnError() = runTest(dispatcher) {
         lookup = { throw CancellationException() }
-        val vm = PantryViewModel(repository, IngredientRepository(api))
-        vm.identifyBarcode(ingredient.barcode)
-        advanceUntilIdle()
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertNull(vm.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun aCancelledLookupDoesNotFallBackToIngredientSearch() = runTest(dispatcher) {
+        lookup = { throw CancellationException() }
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertFalse(vm.uiState.value.data.showIngredientSearch)
+    }
+
+    @Test
+    fun aCancelledLookupStopsLoading() = runTest(dispatcher) {
+        lookup = { throw CancellationException() }
+        val vm = viewModel()
+        vm.identifyBarcode(ingredient.barcode).join()
         assertFalse(vm.uiState.value.isLoading)
     }
 
     @Test
-    fun injectedScannerAdapterFeedsLookupAndInvalidStockIsReportedInState() = runTest(dispatcher) {
-        val scanner = object : BarcodeScanner {
-            override suspend fun scan(): String = ingredient.barcode
-        }
-        val vm = PantryViewModel(repository, IngredientRepository(api), scanner)
-        vm.scanBarcode()
-        advanceUntilIdle()
+    fun anInjectedScannerFeedsTheBarcodeLookup() = runTest(dispatcher) {
+        val vm = viewModel(scanner)
+        vm.scanBarcode().join()
         assertEquals(listOf(ingredient), vm.uiState.value.data.searchResults)
-        vm.selectIngredient(ingredient)
-        assertNull(vm.submitStock("0", "g", "7"))
+    }
+
+    @Test
+    fun invalidStockStartsNoWork() = runTest(dispatcher) {
+        assertNull(viewModelWithSelection().submitStock("0", "g", "7"))
+    }
+
+    @Test
+    fun invalidStockIsFlaggedInState() = runTest(dispatcher) {
+        val vm = viewModelWithSelection()
+        vm.submitStock("0", "g", "7")
         assertTrue(vm.uiState.value.data.invalidStock)
+    }
+
+    @Test
+    fun invalidStockIsNotAddedToThePantry() = runTest(dispatcher) {
+        viewModelWithSelection().submitStock("0", "g", "7")
         assertTrue(pantry.items.isEmpty())
-        vm.submitStock("100", "g", "7")
-        advanceUntilIdle()
+    }
+
+    @Test
+    fun validStockClearsTheInvalidStockFlag() = runTest(dispatcher) {
+        val vm = viewModelWithSelection()
+        vm.submitStock("0", "g", "7")
+        vm.submitStock("100", "g", "7")?.join()
         assertFalse(vm.uiState.value.data.invalidStock)
+    }
+
+    @Test
+    fun validStockIsAddedToThePantry() = runTest(dispatcher) {
+        viewModelWithSelection().submitStock("100", "g", "7")?.join()
         assertEquals(100.0, pantry.items.single().quantity, 0.0)
     }
 
     @Test
-    fun missingScannerFallsBackToSearch() = runTest(dispatcher) {
-        val vm = PantryViewModel(repository, IngredientRepository(api))
-        vm.scanBarcode()
-        advanceUntilIdle()
+    fun aMissingScannerFallsBackToIngredientSearch() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.scanBarcode().join()
         assertTrue(vm.uiState.value.data.showIngredientSearch)
+    }
+
+    @Test
+    fun aMissingScannerIsNotReportedAsAnError() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.scanBarcode().join()
         assertNull(vm.uiState.value.errorMessage)
     }
 }

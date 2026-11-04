@@ -24,24 +24,38 @@ class PantryTest {
         id
     )
 
+    private fun datedPantry() = Pantry(
+        listOf(
+            item("old", 1.0, -1),
+            item("today", 1.0, 0),
+            item("soon", 1.0, 2),
+            item("later", 1.0, 3)
+        )
+    )
+
     @Test
-    fun expirationBoundariesIncludeTodayButExcludeAlreadyExpired() {
-        val pantry =
-            Pantry(
-                listOf(
-                    item("old", 1.0, -1),
-                    item("today", 1.0, 0),
-                    item("soon", 1.0, 2),
-                    item("later", 1.0, 3)
-                )
-            )
-        assertEquals(listOf("old"), pantry.getExpired(today).map { it.pantryItemId })
+    fun getExpiredReturnsItemsPastTheirExpirationDate() {
+        assertEquals(listOf("old"), datedPantry().getExpired(today).map { it.pantryItemId })
+    }
+
+    @Test
+    fun getExpiringWithinIncludesItemsDueTodayAndInsideTheWindow() {
         assertEquals(
             listOf("today", "soon"),
-            pantry.getExpiringWithin(2, today).map {
-                it.pantryItemId
-            }
+            datedPantry().getExpiringWithin(2, today).map { it.pantryItemId }
         )
+    }
+
+    @Test
+    fun getExpiringWithinExcludesItemsBeyondTheWindow() {
+        val expiring = datedPantry().getExpiringWithin(2, today).map { it.pantryItemId }
+        assertFalse("later" in expiring)
+    }
+
+    @Test
+    fun getExpiringWithinExcludesAlreadyExpiredItems() {
+        val expiring = datedPantry().getExpiringWithin(2, today).map { it.pantryItemId }
+        assertFalse("old" in expiring)
     }
 
     @Test
@@ -52,35 +66,66 @@ class PantryTest {
     }
 
     @Test
-    fun insufficientCombinedRequirementsNeverPartiallyDeduct() {
-        val initial = listOf(item("rice", 100.0, 2))
-        val pantry = Pantry(initial)
+    fun hasIngredientsIsFalseWhenCombinedRequirementsExceedStock() {
+        val pantry = Pantry(listOf(item("rice", 100.0, 2)))
         assertFalse(pantry.hasIngredients(recipe(60.0, 60.0), today))
+    }
+
+    @Test
+    fun deductIngredientsRejectsCombinedRequirementsThatExceedStock() {
+        val pantry = Pantry(listOf(item("rice", 100.0, 2)))
         assertThrows(IllegalArgumentException::class.java) {
             pantry.deductIngredients(recipe(60.0, 60.0), today)
         }
+    }
+
+    @Test
+    fun rejectedDeductionLeavesStockUntouched() {
+        val initial = listOf(item("rice", 100.0, 2))
+        val pantry = Pantry(initial)
+        runCatching { pantry.deductIngredients(recipe(60.0, 60.0), today) }
         assertEquals(initial, pantry.items)
     }
 
     @Test
-    fun excludesExpiredStockAndDoesNotGuessUnitConversions() {
-        val pantry = Pantry(listOf(item("expired", 500.0, -1), item("cups", 3.0, 5, "cup")))
+    fun hasIngredientsIgnoresExpiredStock() {
+        val pantry = Pantry(listOf(item("expired", 500.0, -1)))
         assertFalse(pantry.hasIngredients(recipe(100.0), today))
     }
 
     @Test
-    fun quantitiesMustBeFiniteAndCannotBeOverdrawn() {
+    fun hasIngredientsDoesNotConvertBetweenUnits() {
+        val pantry = Pantry(listOf(item("cups", 3.0, 5, "cup")))
+        assertFalse(pantry.hasIngredients(recipe(100.0), today))
+    }
+
+    @Test
+    fun itemQuantityMustBeANumber() {
         assertThrows(IllegalArgumentException::class.java) { item("bad", Double.NaN, 1) }
+    }
+
+    @Test
+    fun itemQuantityMustNotBeNegative() {
         assertThrows(IllegalArgumentException::class.java) { item("bad", -1.0, 1) }
+    }
+
+    @Test
+    fun reduceQuantityRejectsMoreThanTheLotHolds() {
         assertThrows(IllegalArgumentException::class.java) {
             item("ok", 2.0, 1).reduceQuantity(3.0)
         }
     }
 
     @Test
-    fun duplicateIdsDoNotOverwriteExistingStock() {
+    fun addItemRejectsADuplicatePantryItemId() {
         val pantry = Pantry(listOf(item("same", 2.0, 1)))
         assertThrows(IllegalArgumentException::class.java) { pantry.addItem(item("same", 50.0, 1)) }
+    }
+
+    @Test
+    fun rejectedAddLeavesExistingStockUntouched() {
+        val pantry = Pantry(listOf(item("same", 2.0, 1)))
+        runCatching { pantry.addItem(item("same", 50.0, 1)) }
         assertEquals(2.0, pantry.items.single().quantity, 0.0)
     }
 

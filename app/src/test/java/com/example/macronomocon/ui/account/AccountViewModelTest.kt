@@ -15,9 +15,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 
@@ -27,31 +25,50 @@ class AccountViewModelTest {
     private val repository = FakeAccounts()
 
     @Before
-    fun setup() = Dispatchers.setMain(dispatcher)
+    fun setUp() = Dispatchers.setMain(dispatcher)
 
     @After
-    fun cleanup() = Dispatchers.resetMain()
+    fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun registrationAwaitingConfirmationDoesNotPretendToSignIn() = runTest(dispatcher) {
+    fun registrationAwaitingConfirmationMarksTheSubmission() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.register("student@example.com", "password123").join()
+        assertTrue(vm.uiState.value.data.registrationSubmitted)
+    }
+
+    @Test
+    fun registrationAwaitingConfirmationDoesNotSignTheUserIn() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.register("student@example.com", "password123").join()
+        assertNull(vm.uiState.value.data.user)
+    }
+
+    @Test
+    fun registrationTrimsTheEmailAddress() = runTest(dispatcher) {
         val vm = AccountViewModel(repository)
         vm.register(" student@example.com ", "password123").join()
-        assertTrue(vm.uiState.value.data.registrationSubmitted)
-        assertNull(vm.uiState.value.data.user)
         assertEquals("student@example.com", repository.email)
     }
 
     @Test
-    fun registrationRejectionShowsSpecificReason() = runTest(dispatcher) {
+    fun registrationRejectionShowsTheSpecificReason() = runTest(dispatcher) {
         repository.registerFailure = AccountException(AccountException.Reason.EMAIL_RATE_LIMITED)
         val vm = AccountViewModel(repository)
         vm.register("student@example.com", "password123").join()
         assertEquals(UiMessage.ERROR_EMAIL_RATE_LIMITED, vm.uiState.value.errorMessage)
-        assertTrue(!vm.uiState.value.data.registrationSubmitted)
     }
 
     @Test
-    fun unexpectedRegistrationFailureShowsGenericError() = runTest(dispatcher) {
+    fun aRejectedRegistrationIsNotMarkedAsSubmitted() = runTest(dispatcher) {
+        repository.registerFailure = AccountException(AccountException.Reason.EMAIL_RATE_LIMITED)
+        val vm = AccountViewModel(repository)
+        vm.register("student@example.com", "password123").join()
+        assertFalse(vm.uiState.value.data.registrationSubmitted)
+    }
+
+    @Test
+    fun anUnexpectedRegistrationFailureShowsAGenericError() = runTest(dispatcher) {
         repository.registerFailure = IllegalStateException("Sensitive transport error")
         val vm = AccountViewModel(repository)
         vm.register("student@example.com", "password123").join()
@@ -59,7 +76,7 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun autoConfirmedRegistrationLoadsUser() = runTest(dispatcher) {
+    fun autoConfirmedRegistrationLoadsTheUser() = runTest(dispatcher) {
         repository.autoConfirm = true
         val vm = AccountViewModel(repository)
         vm.register("student@example.com", "password123").join()
@@ -67,7 +84,7 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun signOutClearsAccount() = runTest(dispatcher) {
+    fun signOutClearsTheAccount() = runTest(dispatcher) {
         val vm = AccountViewModel(repository)
         vm.logIn("student@example.com", "password123").join()
         vm.logOut().join()
@@ -75,7 +92,7 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun sessionInvalidationClearsAccount() = runTest(dispatcher) {
+    fun sessionInvalidationClearsTheAccount() = runTest(dispatcher) {
         val vm = AccountViewModel(repository)
         vm.logIn("student@example.com", "password123").join()
         repository.signedOutEvents.emit(Unit)
@@ -84,11 +101,23 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun googleRedirectSessionLoadsUser() = runTest(dispatcher) {
+    fun googleSignInStartsTheRedirectFlow() = runTest(dispatcher) {
         val vm = AccountViewModel(repository)
         vm.signInWithGoogle().join()
         assertTrue(repository.googleStarted)
+    }
+
+    @Test
+    fun googleSignInDoesNotSignInBeforeTheRedirectReturns() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.signInWithGoogle().join()
         assertNull(vm.uiState.value.data.user)
+    }
+
+    @Test
+    fun theGoogleRedirectSignedInEventLoadsTheUser() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.signInWithGoogle().join()
         repository.current = User("google-id", "student@gmail.com", "Student")
         repository.signedInEvents.emit(Unit)
         advanceUntilIdle()
@@ -96,7 +125,7 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun failedGoogleLaunchShowsSafeError() = runTest(dispatcher) {
+    fun aFailedGoogleLaunchShowsASafeError() = runTest(dispatcher) {
         repository.fail = true
         val vm = AccountViewModel(repository)
         vm.signInWithGoogle().join()
@@ -104,11 +133,18 @@ class AccountViewModelTest {
     }
 
     @Test
-    fun failedLoginShowsSafeError() = runTest(dispatcher) {
+    fun aFailedLoginDoesNotSignTheUserIn() = runTest(dispatcher) {
         repository.fail = true
         val vm = AccountViewModel(repository)
         vm.logIn("student@example.com", "wrong").join()
         assertNull(vm.uiState.value.data.user)
+    }
+
+    @Test
+    fun aFailedLoginShowsASafeError() = runTest(dispatcher) {
+        repository.fail = true
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "wrong").join()
         assertEquals(UiMessage.ERROR_SIGN_IN, vm.uiState.value.errorMessage)
     }
 

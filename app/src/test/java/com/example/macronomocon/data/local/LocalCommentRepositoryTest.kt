@@ -1,38 +1,54 @@
 package com.example.macronomocon.data.local
 
 import com.example.macronomocon.domain.model.User
+import com.example.macronomocon.testing.assertThrows
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 class LocalCommentRepositoryTest {
-    private var user: User? = User("supabase-user", "a@example.com", "A")
+    private val recipeId = "716429"
+    private val author = User("supabase-user", "a@example.com", "A")
+    private val other = User("someone-else", "b@example.com", "B")
+    private var user: User? = author
     private val comments = LocalCommentRepository { user }
 
     @Test
-    fun commentsAreAuthoredBySignedInUserForAnyRecipe() = runTest {
-        val comment = comments.publish("716429", "Great", null)
-        assertEquals("supabase-user", comment.authorId)
-        assertEquals(listOf(comment), comments.findByRecipe("716429"))
-        comments.delete(comment.commentId)
-        assertTrue(comments.findByRecipe("716429").isEmpty())
+    fun publishedCommentsAreAuthoredBySignedInUser() = runTest {
+        assertEquals(author.userId, comments.publish(recipeId, "Great", null).authorId)
     }
 
     @Test
-    fun commentsAreNotSharedBetweenAccountsAndClearRemovesThem() = runTest {
-        comments.publish("716429", "Great", null)
-        user = User("someone-else", "b@example.com", "B")
-        assertTrue(comments.findByRecipe("716429").isEmpty())
-        user = User("supabase-user", "a@example.com", "A")
-        comments.clear()
-        assertTrue(comments.findByRecipe("716429").isEmpty())
+    fun publishedCommentsAreFoundByRecipe() = runTest {
+        val comment = comments.publish(recipeId, "Great", null)
+        assertEquals(listOf(comment), comments.findByRecipe(recipeId))
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun otherUsersCannotDelete() = runTest {
-        val comment = comments.publish("716429", "Great", null)
-        user = User("someone-else", "b@example.com", "B")
+    @Test
+    fun theAuthorCanDeleteTheirOwnComment() = runTest {
+        val comment = comments.publish(recipeId, "Great", null)
         comments.delete(comment.commentId)
+        assertTrue(comments.findByRecipe(recipeId).isEmpty())
+    }
+
+    @Test
+    fun commentsAreNotVisibleToOtherAccounts() = runTest {
+        comments.publish(recipeId, "Great", null)
+        user = other
+        assertTrue(comments.findByRecipe(recipeId).isEmpty())
+    }
+
+    @Test
+    fun clearRemovesTheSignedInUsersComments() = runTest {
+        comments.publish(recipeId, "Great", null)
+        comments.clear()
+        assertTrue(comments.findByRecipe(recipeId).isEmpty())
+    }
+
+    @Test
+    fun otherAccountsCannotDeleteAComment() = runTest {
+        val comment = comments.publish(recipeId, "Great", null)
+        user = other
+        assertThrows<IllegalArgumentException> { comments.delete(comment.commentId) }
     }
 }

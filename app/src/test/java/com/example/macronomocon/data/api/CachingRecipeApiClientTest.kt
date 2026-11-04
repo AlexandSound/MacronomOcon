@@ -8,7 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
+import org.junit.Assert.*
 import org.junit.Test
 
 class CachingRecipeApiClientTest {
@@ -48,26 +48,45 @@ class CachingRecipeApiClientTest {
     private val cache = CachingRecipeApiClient(api, ttlMillis = 1_000) { clock }
 
     @Test
-    fun concurrentIdenticalSearchesShareOneCall() = runTest {
-        val results = listOf(
+    fun concurrentSearchesForTheSameIngredientsMakeOneApiCall() = runTest {
+        listOf(
             async { cache.findByIngredients(listOf(rice, beans)) },
             async { cache.findByIngredients(listOf(beans, rice)) }
         ).awaitAll()
         assertEquals(1, api.searches)
+    }
+
+    @Test
+    fun concurrentSearchesForTheSameIngredientsShareOneResult() = runTest {
+        val results = listOf(
+            async { cache.findByIngredients(listOf(rice, beans)) },
+            async { cache.findByIngredients(listOf(beans, rice)) }
+        ).awaitAll()
         assertEquals(results[0], results[1])
     }
 
     @Test
-    fun searchResultsServeRecipeDetails() = runTest {
+    fun searchResultsPopulateTheRecipeDetailCache() = runTest {
         cache.searchRecipes("Pasta")
         assertEquals("10", cache.getRecipe("10").recipeId)
+    }
+
+    @Test
+    fun cachedRecipeDetailsAvoidASingleRecipeApiCall() = runTest {
+        cache.searchRecipes("Pasta")
+        cache.getRecipe("10")
         assertEquals(0, api.single)
+    }
+
+    @Test
+    fun searchQueriesMatchIgnoringCaseAndSurroundingSpace() = runTest {
+        cache.searchRecipes("Pasta")
         cache.searchRecipes(" pasta ")
         assertEquals(1, api.searches)
     }
 
     @Test
-    fun entriesExpireAfterTtl() = runTest {
+    fun entriesExpireAfterTheTimeToLive() = runTest {
         cache.findByIngredients(listOf(rice))
         clock = 1_000
         cache.findByIngredients(listOf(rice))
@@ -75,11 +94,23 @@ class CachingRecipeApiClientTest {
     }
 
     @Test
-    fun bulkFetchesOnlyMissingRecipesInOneCall() = runTest {
+    fun bulkFetchReturnsKnownRecipesInRequestOrder() = runTest {
         cache.getRecipe("10")
         val saved = cache.getRecipes(listOf("30", "10", "20", "99"))
         assertEquals(listOf("30", "10", "20"), saved.map { it.recipeId })
+    }
+
+    @Test
+    fun bulkFetchRequestsOnlyUncachedRecipesInOneCall() = runTest {
+        cache.getRecipe("10")
+        cache.getRecipes(listOf("30", "10", "20", "99"))
         assertEquals(listOf(listOf("30", "20", "99")), api.bulk)
+    }
+
+    @Test
+    fun aRepeatedBulkFetchIsServedEntirelyFromTheCache() = runTest {
+        cache.getRecipe("10")
+        cache.getRecipes(listOf("30", "10", "20", "99"))
         cache.getRecipes(listOf("10", "20", "30"))
         assertEquals(1, api.bulk.size)
     }

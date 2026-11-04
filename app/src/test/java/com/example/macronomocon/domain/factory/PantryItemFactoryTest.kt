@@ -12,22 +12,49 @@ class PantryItemFactoryTest {
     private val rice = Ingredient("rice", "Rice")
 
     @Test
-    fun validInputIsTrimmedAndDated() {
-        val item = factory.create(rice, " 150 ", " g ", "7")!!
-        assertEquals(150.0, item.quantity, 0.0)
-        assertEquals(PantryItem.UNIT_GRAMS, item.unit)
-        assertEquals(today.plusDays(7), item.expirationDate)
+    fun parsesTheQuantityIgnoringSurroundingSpace() {
+        assertEquals(150.0, factory.create(rice, " 150 ", " g ", "7")!!.quantity, 0.0)
     }
 
     @Test
-    fun invalidInputIsRejected() {
+    fun parsesTheUnitIgnoringSurroundingSpace() {
+        assertEquals(PantryItem.UNIT_GRAMS, factory.create(rice, " 150 ", " g ", "7")!!.unit)
+    }
+
+    @Test
+    fun datesExpirationShelfLifeDaysFromToday() {
+        assertEquals(today.plusDays(7), factory.create(rice, "150", "g", "7")!!.expirationDate)
+    }
+
+    @Test
+    fun rejectsANonPositiveQuantity() {
         assertNull(factory.create(rice, "0", "g", "7"))
+    }
+
+    @Test
+    fun rejectsAQuantityThatIsNotANumber() {
         assertNull(factory.create(rice, "NaN", "g", "7"))
+    }
+
+    @Test
+    fun rejectsABlankUnit() {
         assertNull(factory.create(rice, "1", " ", "7"))
+    }
+
+    @Test
+    fun rejectsANegativeShelfLife() {
         assertNull(factory.create(rice, "1", "g", "-1"))
+    }
+
+    @Test
+    fun rejectsAShelfLifeBeyondTheMaximum() {
         assertNull(
             factory.create(rice, "1", "g", (PantryItemFactory.MAX_SHELF_LIFE_DAYS + 1).toString())
         )
+    }
+
+    @Test
+    fun acceptsAShelfLifeAtTheMaximum() {
         assertNotNull(
             factory.create(rice, "1", "g", PantryItemFactory.MAX_SHELF_LIFE_DAYS.toString())
         )
