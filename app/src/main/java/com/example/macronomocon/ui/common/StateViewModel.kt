@@ -33,19 +33,23 @@ abstract class StateViewModel<T>(initial: T) : ViewModel() {
         mutableState.update { it.copy(errorMessage = null) }
     }
 
-    protected fun action(errorMessage: UiMessage, block: suspend () -> Unit): Job =
-        viewModelScope.launch {
-            actions.withLock {
-                mutableState.update { it.copy(isLoading = true, errorMessage = null) }
-                try {
-                    block()
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    mutableState.update { it.copy(errorMessage = errorMessage) }
-                } finally {
-                    mutableState.update { it.copy(isLoading = false) }
-                }
+    /** [errorFor] may give a more specific message for an expected failure; otherwise [errorMessage] is shown. */
+    protected fun action(
+        errorMessage: UiMessage,
+        errorFor: (Exception) -> UiMessage? = { null },
+        block: suspend () -> Unit
+    ): Job = viewModelScope.launch {
+        actions.withLock {
+            mutableState.update { it.copy(isLoading = true, errorMessage = null) }
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                mutableState.update { it.copy(errorMessage = errorFor(e) ?: errorMessage) }
+            } finally {
+                mutableState.update { it.copy(isLoading = false) }
             }
         }
+    }
 }

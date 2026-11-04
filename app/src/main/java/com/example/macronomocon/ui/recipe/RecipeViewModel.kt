@@ -29,7 +29,7 @@ class RecipeViewModel(private val repository: RecipeRepository) :
     }
 
     fun loadSaved(ids: Set<String>) = action(UiMessage.ERROR_RETRIEVE_RECIPES) {
-        allRecipes = ids.map { repository.findById(it) }
+        allRecipes = repository.findByIds(ids)
         updateData { it.copy(recipes = allRecipes) }
     }
 

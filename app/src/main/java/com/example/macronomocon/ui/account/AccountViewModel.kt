@@ -1,11 +1,14 @@
 package com.example.macronomocon.ui.account
 
+import androidx.lifecycle.viewModelScope
 import com.example.macronomocon.data.repository.AccountRepository
+import com.example.macronomocon.domain.model.AccountException
 import com.example.macronomocon.domain.model.AuthenticationResult
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.common.StateViewModel
 import com.example.macronomocon.ui.common.UiMessage
+import kotlinx.coroutines.launch
 
 data class AccountState(
     val user: User? = null,
@@ -15,14 +18,36 @@ data class AccountState(
 
 class AccountViewModel(private val repository: AccountRepository) :
     StateViewModel<AccountState>(AccountState()) {
+    init {
+        viewModelScope.launch {
+            repository.signedOutEvents.collect { updateData { AccountState() } }
+        }
+        viewModelScope.launch {
+            repository.signedInEvents.collect { loadAccount() }
+        }
+    }
+
     fun loadAccount() = action(UiMessage.ERROR_LOAD_YOUR_ACCOUNT) {
         val user = repository.findUser()
         updateData { it.copy(user = user) }
     }
 
-    fun register(email: String, password: String) = action(UiMessage.ERROR_REGISTER) {
+    fun register(email: String, password: String) = action(
+        UiMessage.ERROR_REGISTER,
+        { (it as? AccountException)?.reason?.let(::registrationError) }
+    ) {
         repository.register(email.trim(), password)
-        updateData { it.copy(registrationSubmitted = true) }
+        val user = repository.findUser()
+        updateData { it.copy(registrationSubmitted = true, user = user) }
+    }
+
+    private fun registrationError(reason: AccountException.Reason) = when (reason) {
+        AccountException.Reason.EMAIL_IN_USE -> UiMessage.ERROR_EMAIL_IN_USE
+        AccountException.Reason.INVALID_EMAIL -> UiMessage.ERROR_INVALID_EMAIL
+        AccountException.Reason.WEAK_PASSWORD -> UiMessage.ERROR_WEAK_PASSWORD
+        AccountException.Reason.EMAIL_NOT_AUTHORIZED -> UiMessage.ERROR_EMAIL_NOT_AUTHORIZED
+        AccountException.Reason.EMAIL_RATE_LIMITED -> UiMessage.ERROR_EMAIL_RATE_LIMITED
+        AccountException.Reason.SIGNUP_DISABLED -> UiMessage.ERROR_SIGNUP_DISABLED
     }
 
     fun logIn(email: String, password: String) = action(UiMessage.ERROR_SIGN_IN) {
@@ -33,6 +58,10 @@ class AccountViewModel(private val repository: AccountRepository) :
                 AuthenticationResult.AwaitingOtp -> AccountState(requiresOtp = true)
             }
         }
+    }
+
+    fun signInWithGoogle() = action(UiMessage.ERROR_GOOGLE_SIGN_IN) {
+        repository.signInWithGoogle()
     }
 
     fun verifyOtp(code: String) = action(UiMessage.ERROR_VERIFY_THE_CODE) {

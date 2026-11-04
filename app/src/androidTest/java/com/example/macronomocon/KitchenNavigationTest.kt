@@ -6,27 +6,36 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
+import com.example.macronomocon.data.mock.MockAppContainer
+import com.example.macronomocon.ui.MacronomoconApp
+import com.example.macronomocon.ui.theme.MacronomOconTheme
 import org.junit.Rule
 import org.junit.Test
 
 class KitchenNavigationTest {
     @get:Rule
-    val compose = createAndroidComposeRule<MainActivity>()
+    val compose = createComposeRule()
 
-    private fun text(id: Int) = compose.activity.getString(id)
+    private fun text(id: Int) =
+        InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
     @Test
     fun demoFlowAddsAnIngredientAndOpensNestedRecipeAndProfileViews() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        compose.setContent {
+            MacronomOconTheme { MacronomoconApp(MockAppContainer.getInstance(context.resources)) }
+        }
         compose.onNodeWithText(text(R.string.nav_pantry)).performClick()
         compose.onNodeWithText(text(R.string.add_ingredient)).performClick()
-        compose.onNodeWithText(text(R.string.demo_scan)).performClick()
+        compose.onNodeWithText(text(R.string.scan_barcode)).performClick()
         compose.onNode(
             hasText(text(R.string.demo_rice)) and hasAnyAncestor(isDialog())
         ).performClick()

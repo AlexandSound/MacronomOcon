@@ -55,14 +55,10 @@ fun AddIngredientDialog(
             ) {
                 StateFeedback(state, onDismissError)
                 if (selected == null) {
-                    WarmButton(stringResource(R.string.demo_scan), {
+                    WarmButton(stringResource(R.string.scan_barcode), {
                         searched = true
                         onScan()
                     }, Modifier.fillMaxWidth(), !state.isLoading)
-                    Text(
-                        stringResource(R.string.scan_note),
-                        style = MaterialTheme.typography.bodySmall
-                    )
                     if (state.data.showIngredientSearch) {
                         Text(
                             stringResource(R.string.search_fallback)

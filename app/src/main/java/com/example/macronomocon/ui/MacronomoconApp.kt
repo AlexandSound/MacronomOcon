@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +58,7 @@ import com.example.macronomocon.ui.components.StateFeedback
 import com.example.macronomocon.ui.pantry.PantryViewModel
 import com.example.macronomocon.ui.recipe.RecipeViewModel
 import com.example.macronomocon.ui.screens.AddIngredientDialog
+import com.example.macronomocon.ui.screens.AuthScreen
 import com.example.macronomocon.ui.screens.KitchenScreen
 import com.example.macronomocon.ui.screens.PantryScreen
 import com.example.macronomocon.ui.screens.ProfileScreen
@@ -75,11 +77,37 @@ enum class Destination(@param:StringRes val label: Int, @param:DrawableRes val i
 @Composable
 fun MacronomoconApp(container: AppContainer) {
     val factory = remember(container) { container.viewModelFactory() }
+    val account: AccountViewModel = viewModel(factory = factory)
+    val state by account.uiState.collectAsStateWithLifecycle()
+    var checkingSession by remember(container) { mutableStateOf(true) }
+    LaunchedEffect(container) {
+        if (container.authConfigured) account.loadAccount().join()
+        checkingSession = false
+    }
+    if (container.liveAuth && (checkingSession || state.data.user == null)) {
+        AuthScreen(
+            state = state,
+            configured = container.authConfigured,
+            checkingSession = checkingSession,
+            onLogin = account::logIn,
+            onRegister = account::register,
+            onGoogle = account::signInWithGoogle,
+            onDismiss = account::clearError
+        )
+    } else {
+        key(state.data.user?.userId) {
+            SignedInApp(container, account)
+        }
+    }
+}
+
+@Composable
+private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
+    val factory = remember(container) { container.viewModelFactory() }
     val pantry: PantryViewModel = viewModel(factory = factory)
     val recipes: RecipeViewModel = viewModel(factory = factory)
     val kitchenRecipes: RecipeViewModel =
         viewModel(key = Destination.KITCHEN.name, factory = factory)
-    val account: AccountViewModel = viewModel(factory = factory)
     val comments: CommentViewModel = viewModel(factory = factory)
     val pantryState by pantry.uiState.collectAsStateWithLifecycle()
     val recipeState by recipes.uiState.collectAsStateWithLifecycle()
@@ -115,7 +143,6 @@ fun MacronomoconApp(container: AppContainer) {
     }
 
     LaunchedEffect(container) {
-        account.loadAccount().join()
         pantry.loadPantry().join()
         recommendations()
     }
@@ -228,19 +255,26 @@ fun MacronomoconApp(container: AppContainer) {
                                     ::openRecipe,
                                     recipes::clearError
                                 )
-                                Destination.PROFILE -> ProfileScreen(accountState, { enabled ->
-                                    accountState.data.user?.let {
-                                        account.updatePreferences(
-                                            it.preferences.copy(notificationsEnabled = enabled)
+                                Destination.PROFILE -> ProfileScreen(
+                                    accountState,
+                                    { enabled ->
+                                        accountState.data.user?.let {
+                                            account.updatePreferences(
+                                                it.preferences.copy(notificationsEnabled = enabled)
+                                            )
+                                        }
+                                    },
+                                    {
+                                        filter = RecipeFilter.SAVED
+                                        navigate(Destination.RECIPES)
+                                        recipes.loadSaved(
+                                            accountState.data.user?.favoriteRecipeIds.orEmpty()
                                         )
-                                    }
-                                }, {
-                                    filter = RecipeFilter.SAVED
-                                    navigate(Destination.RECIPES)
-                                    recipes.loadSaved(
-                                        accountState.data.user?.favoriteRecipeIds.orEmpty()
-                                    )
-                                }, account::clearError)
+                                    },
+                                    account::clearError,
+                                    liveAuth = container.liveAuth,
+                                    onLogout = account::logOut
+                                )
                             }
                         }
                     }

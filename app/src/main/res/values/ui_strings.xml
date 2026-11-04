@@ -6,8 +6,6 @@
     <string name="brand_eyebrow">THE MACRONOMOCON</string>
     <string name="kitchen_title">A little inspiration.\nA delicious day.</string>
     <string name="kitchen_subtitle">Good food starts with what you already have.</string>
-    <string name="demo_badge">Demo kitchen</string>
-    <string name="demo_explanation">You are exploring sample data. Changes last for this app session; no account or network is required.</string>
     <plurals name="pantry_count">
         <item quantity="one">%1$d ingredient on hand</item>
         <item quantity="other">%1$d ingredients on hand</item>
@@ -68,7 +66,7 @@
     <string name="profile_subtitle">Your kitchen, your preferences.</string>
     <string name="preferences_title">Kitchen preferences</string>
     <string name="notifications_title">Freshness reminders</string>
-    <string name="notifications_body">Save your preference for future reminders. Demo mode does not send notifications.</string>
+    <string name="notifications_body">Save your preference for reminders about ingredients that expire soon.</string>
     <plurals name="profile_saved">
         <item quantity="one">%1$d saved recipe</item>
         <item quantity="other">%1$d saved recipes</item>
@@ -76,8 +74,7 @@
     <string name="browse_saved">Browse saved recipes</string>
     <string name="add_dialog_title">A new pantry staple</string>
     <string name="ingredient_search_hint">Search ingredients</string>
-    <string name="demo_scan">Try demo barcode scan</string>
-    <string name="scan_note">Demo scan looks up brown rice. Live camera scanning will be connected separately.</string>
+    <string name="scan_barcode">Scan barcode</string>
     <string name="search_fallback">No barcode match? Search for an ingredient below.</string>
     <string name="no_ingredients_found">No ingredients found. Try rice, chickpeas, tomatoes, spinach, lemon, or oats.</string>
     <string name="quantity_label">Quantity</string>

@@ -8,4 +8,7 @@ interface RecipeApiClient {
     suspend fun findByIngredients(items: List<Ingredient>): List<Recipe>
     suspend fun searchRecipes(query: String): List<Recipe>
     suspend fun getRecipe(recipeId: String): Recipe
+
+    /** Recipes for [recipeIds]; unknown IDs are omitted. Transports may batch this into one call. */
+    suspend fun getRecipes(recipeIds: List<String>): List<Recipe> = recipeIds.map { getRecipe(it) }
 }

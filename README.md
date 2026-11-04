@@ -14,7 +14,7 @@ lookup and manual search. Warm light/dark themes include hover and press feedbac
 | MVVM | `ui/*/…ViewModel` expose read-only `StateFlow<ViewState<T>>`; Compose screens render it and send events back |
 | Repository Singleton | `MockAppContainer.getInstance` (double-checked, `@Volatile`) gives the process one container, so every screen shares one instance of each repository |
 | Factory | `AppContainer.viewModelFactory()` builds every ViewModel; `AppContainer.barcodeScanner()` creates scanners; `PantryItemFactory` turns raw form input into a valid `PantryItem` |
-| Adapter | `BarcodeScanner` is the target interface; `MLKitBarcodeScanner` adapts ML Kit's callback client and `DemoBarcodeScanner` adapts a fixture code. `IngredientApiClient`/`RecipeApiClient` are the targets for future transport adapters |
+| Adapter | `BarcodeScanner` is the target interface; `GoogleCodeScanner` adapts Google's code scanner task and `DemoBarcodeScanner` adapts a fixture code for previews and UI tests. `IngredientApiClient`/`RecipeApiClient` are the targets for future transport adapters |
 | Dependency injection | Constructor injection from the composition root; no child view looks up a dependency |
 
 Fixed values such as units, the "use soon" window, the quick-recipe limit, the maximum
@@ -23,7 +23,12 @@ shelf life, and demo IDs are `const val`s in companion objects on the class they
 ### Dependency injection and demo data
 
 `MacronomoconApplication` owns one `AppContainer`. The current binding is
-`MockAppContainer.getInstance(resources)`; `AppContainer.viewModelFactory()` injects
+`AuthAppContainer(context)`: Supabase accounts and recipe bookmarks, Spoonacular recipes and
+ingredients through the `spoonacular` Edge Function, Google's code scanner, and in-memory
+pantry/comments (`data/local`). `MockAppContainer` remains for previews and UI tests only.
+Add `SUPABASE_PUBLISHABLE_KEY` to ignored `local.properties`
+to enable email and Google sign-in (see `supabase/README.md` for the Google provider setup).
+`AppContainer.viewModelFactory()` injects
 repositories into lifecycle-owned ViewModels. Compose collects their StateFlows
 with `collectAsStateWithLifecycle`. Replace the container binding with production
 repository implementations when the backend is ready; screens do not access mocks.
@@ -33,9 +38,8 @@ The mock container shares one mutex-protected in-memory session. Adding/removing
 stock, recording meals, saving recipes, changing preferences, and posting/liking/deleting
 comments update that session across screens. Independent containers remain isolated
 for tests (their constructor is `internal` and `@VisibleForTesting`). Restarting the app
-process resets demo data. Mock authentication and share
-URLs are fixtures, not production services. The UI clearly labels demo mode and does
-not claim to send notifications or use the camera.
+process resets its data. Mock authentication and share URLs are fixtures, not production
+services; the app itself uses `AuthAppContainer`.
 
 Sample display content is in `res/values/demo_strings.xml`, and all new UI copy is in
 `res/values/ui_strings.xml`. `MockSeed` can also be constructed directly in unit tests.
@@ -57,7 +61,7 @@ Images are Material Icons vector drawables only (`res/drawable/ic_*.xml`); recip
 | `domain/model` | Ingredients, recipes, pantry stock/expiration/deduction, profiles, preferences, comments, and enums |
 | `data/repository` | Ingredient and recipe orchestration; authenticated account, pantry, comment, and recipe-storage contracts |
 | `data/api` | Ingredient lookup/search and recipe API contracts for transport implementations |
-| `data/scanner` | Google ML Kit adapter for EAN/UPC barcode decoding on the device |
+| `data/scanner` | Google code scanner adapter for EAN/UPC barcodes |
 | `ui/account`, `ui/pantry`, `ui/recipe`, `ui/comment` | ViewModels with read-only StateFlow, serialized actions, loading/error state, and cancellation handling |
 
 `PantryViewModel` receives a `BarcodeScanner` from the container, closes it when the
@@ -90,11 +94,8 @@ hash: password verification, OTP challenges, lockouts, and authorization belong 
 the authentication service. Server repository implementations must derive identity
 from the session, enforce ownership/unique likes, and make inventory writes atomic.
 
-Remaining integration work: authenticated backend transports, Open Food Facts and
-Spoonacular transport mapping, production authentication screens, and live camera
-capture/permission handling. A camera binding should return
-`MLKitBarcodeScanner { nextFrame() }` from `barcodeScanner()` and retain each frame
-until `scan()` returns.
+Remaining integration work: pantry and comment backend transports, Open Food Facts
+barcode lookup, and password recovery/MFA/account deletion flows.
 The singleton connection pool, connection factory, and MySQL connections belong in
 a separate backend module; this Android-only project does not connect directly to MySQL.
 
@@ -109,7 +110,7 @@ With an emulator running, execute the Compose navigation test using
 tabs, nested recipe details, back navigation, and saved recipes.
 
 The ViewModels follow the [Android architecture guidance](https://developer.android.com/topic/architecture/recommendations).
-The scanner uses the [bundled ML Kit barcode model](https://developers.google.com/ml-kit/vision/barcode-scanning/android).
+The scanner uses [Google's code scanner](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner): Google Play services shows the camera UI, so the app requests no camera permission.
 Core library desugaring supports `java.time` on the project's API 24 minimum.
 
 | Setting | Version |
@@ -117,7 +118,7 @@ Core library desugaring supports `java.time` on the project's API 24 minimum.
 | Compile SDK | 37 |
 | Target SDK | 37 |
 | Minimum SDK | 24 |
-| Gradle | 9.6.0 |
+| Gradle | 9.8.2 |
 | Android Gradle Plugin (AGP) | 9.4.1 |
 | Gradle daemon JDK | 25 |
 | Java source/target compatibility | 11 |
