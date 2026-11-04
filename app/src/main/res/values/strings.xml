@@ -2,7 +2,14 @@
     <string name="app_name">MacronomOcon</string>
     <string name="error_load_your_account">Unable to load your account</string>
     <string name="error_register">Unable to register</string>
+    <string name="error_email_in_use">An account with this email already exists. Sign in instead.</string>
+    <string name="error_invalid_email">This email address was not accepted. Try a different one.</string>
+    <string name="error_weak_password">This password is too weak. Choose a longer, less common password.</string>
+    <string name="error_email_not_authorized">The confirmation email could not be sent to this address. Try a different email or continue with Google.</string>
+    <string name="error_email_rate_limited">Too many sign-up emails were sent recently. Wait a while and try again, or continue with Google.</string>
+    <string name="error_signup_disabled">New account registration is currently turned off.</string>
     <string name="error_sign_in">Unable to sign in</string>
+    <string name="error_google_sign_in">Unable to open Google sign-in</string>
     <string name="error_verify_the_code">Unable to verify the code</string>
     <string name="error_sign_out">Unable to sign out</string>
     <string name="error_update_your_account">Unable to update your account</string>

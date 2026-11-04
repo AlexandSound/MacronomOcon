@@ -1,5 +1,6 @@
 package com.example.macronomocon.di
 
+import android.content.Intent
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -17,6 +18,8 @@ import com.example.macronomocon.ui.recipe.RecipeViewModel
 
 /** Application-scoped composition root (one per process, so each repository is a singleton). Screens depend on contracts, never on mock implementations. */
 interface AppContainer {
+    val liveAuth: Boolean get() = false
+    val authConfigured: Boolean get() = true
     val accounts: AccountRepository
     val pantry: PantryRepository
     val ingredients: IngredientRepository
@@ -25,6 +28,9 @@ interface AppContainer {
 
     /** Factory method: each caller receives, owns, and closes its own scanner. */
     fun barcodeScanner(): BarcodeScanner
+
+    /** Completes an OAuth sign-in when the browser redirects back to the app. */
+    fun handleAuthRedirect(intent: Intent) = Unit
 }
 
 /** Factory pattern: the only place ViewModels are constructed, with dependencies injected. */

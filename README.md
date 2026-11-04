@@ -23,7 +23,12 @@ shelf life, and demo IDs are `const val`s in companion objects on the class they
 ### Dependency injection and demo data
 
 `MacronomoconApplication` owns one `AppContainer`. The current binding is
-`MockAppContainer.getInstance(resources)`; `AppContainer.viewModelFactory()` injects
+`AuthAppContainer(context)`: Supabase accounts and recipe bookmarks, Spoonacular recipes and
+ingredients through the `spoonacular` Edge Function, Google's code scanner, and in-memory
+pantry/comments (`data/local`). `MockAppContainer` remains for previews and UI tests only.
+Add `SUPABASE_PUBLISHABLE_KEY` to ignored `local.properties`
+to enable email and Google sign-in (see `supabase/README.md` for the Google provider setup).
+`AppContainer.viewModelFactory()` injects
 repositories into lifecycle-owned ViewModels. Compose collects their StateFlows
 with `collectAsStateWithLifecycle`. Replace the container binding with production
 repository implementations when the backend is ready; screens do not access mocks.
@@ -91,7 +96,7 @@ the authentication service. Server repository implementations must derive identi
 from the session, enforce ownership/unique likes, and make inventory writes atomic.
 
 Remaining integration work: authenticated backend transports, Open Food Facts and
-Spoonacular transport mapping, production authentication screens, and live camera
+Spoonacular transport mapping, password recovery/MFA/account deletion flows, and live camera
 capture/permission handling. A camera binding should return
 `MLKitBarcodeScanner { nextFrame() }` from `barcodeScanner()` and retain each frame
 until `scan()` returns.

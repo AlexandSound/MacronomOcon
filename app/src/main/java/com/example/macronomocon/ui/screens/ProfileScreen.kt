@@ -32,7 +32,9 @@ fun ProfileScreen(
     state: ViewState<AccountState>,
     onNotifications: (Boolean) -> Unit,
     onSaved: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    liveAuth: Boolean = false,
+    onLogout: () -> Unit = {}
 ) {
     val user = state.data.user
     LazyColumn(
@@ -71,6 +73,16 @@ fun ProfileScreen(
             item {
                 WarmButton(stringResource(R.string.browse_saved), onSaved, Modifier.fillMaxWidth())
             }
+            if (liveAuth) {
+                item {
+                    androidx.compose.material3.Button(
+                        onClick = onLogout,
+                        enabled = !state.isLoading
+                    ) {
+                        Text(stringResource(R.string.auth_sign_out))
+                    }
+                }
+            }
             item {
                 Text(
                     stringResource(R.string.preferences_title),
@@ -83,20 +95,6 @@ fun ProfileScreen(
                     !state.isLoading,
                     onNotifications
                 )
-            }
-        }
-        item {
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        stringResource(R.string.demo_badge),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(stringResource(R.string.demo_explanation))
-                }
             }
         }
     }
