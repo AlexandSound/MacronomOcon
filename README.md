@@ -118,7 +118,7 @@ Core library desugaring supports `java.time` on the project's API 24 minimum.
 | Compile SDK | 37 |
 | Target SDK | 37 |
 | Minimum SDK | 24 |
-| Gradle | 9.6.0 |
+| Gradle | 9.8.2 |
 | Android Gradle Plugin (AGP) | 9.4.1 |
 | Gradle daemon JDK | 25 |
 | Java source/target compatibility | 11 |
