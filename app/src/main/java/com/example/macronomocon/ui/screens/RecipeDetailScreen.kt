@@ -60,7 +60,7 @@ fun RecipeDetailScreen(
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        item { RecipeSymbol(Modifier.fillMaxWidth().height(190.dp)) }
+        item { RecipeSymbol(Modifier.fillMaxWidth().height(190.dp), recipe.imageUrl) }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(recipe.name, style = MaterialTheme.typography.headlineLarge)

@@ -49,7 +49,8 @@ object SpoonacularMapper {
             toolsNeeded = steps.flatMap { it.array("equipment") }
                 .mapNotNull { it.jsonObject.string("name") }.distinct(),
             requirements = json.array("extendedIngredients")
-                .mapNotNull { requirement(it.jsonObject) }
+                .mapNotNull { requirement(it.jsonObject) },
+            imageUrl = json.string("image")
         )
     }
 
