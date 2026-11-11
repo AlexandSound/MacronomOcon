@@ -3,16 +3,14 @@ package com.example.macronomocon.di
 import android.content.Intent
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.lifecycle.viewmodel.viewModelFactory as buildViewModelFactory
 import com.example.macronomocon.data.repository.AccountRepository
-import com.example.macronomocon.data.repository.CommentRepository
 import com.example.macronomocon.data.repository.IngredientRepository
-import com.example.macronomocon.data.repository.PantryRepository
 import com.example.macronomocon.data.repository.RecipeRepository
 import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.domain.factory.PantryItemFactory
+import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.ui.account.AccountViewModel
-import com.example.macronomocon.ui.comment.CommentViewModel
 import com.example.macronomocon.ui.pantry.PantryViewModel
 import com.example.macronomocon.ui.recipe.RecipeViewModel
 
@@ -21,10 +19,8 @@ interface AppContainer {
     val liveAuth: Boolean get() = false
     val authConfigured: Boolean get() = true
     val accounts: AccountRepository
-    val pantry: PantryRepository
     val ingredients: IngredientRepository
     val recipes: RecipeRepository
-    val comments: CommentRepository
 
     /** Factory method: each caller receives, owns, and closes its own scanner. */
     fun barcodeScanner(): BarcodeScanner
@@ -34,9 +30,11 @@ interface AppContainer {
 }
 
 /** Factory pattern: the only place ViewModels are constructed, with dependencies injected. */
-fun AppContainer.viewModelFactory(): ViewModelProvider.Factory = viewModelFactory {
-    initializer { AccountViewModel(accounts) }
-    initializer { PantryViewModel(pantry, ingredients, barcodeScanner(), PantryItemFactory()) }
-    initializer { RecipeViewModel(recipes) }
-    initializer { CommentViewModel(comments) }
-}
+fun AppContainer.viewModelFactory(currentUser: () -> User? = { null }): ViewModelProvider.Factory =
+    buildViewModelFactory {
+        initializer { AccountViewModel(accounts) }
+        initializer {
+            PantryViewModel(currentUser, ingredients, barcodeScanner(), PantryItemFactory())
+        }
+        initializer { RecipeViewModel(recipes) }
+    }

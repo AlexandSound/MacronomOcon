@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
   );
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return json({ error: "unauthorized" }, 401);
+  const { data: authData, error } = await supabase.auth.getUser(token);
+  if (error || !authData.user) return json({ error: "unauthorized" }, 401);
 
   const key = Deno.env.get("SPOONACULAR_API_KEY");
   if (!key) return json({ error: "not_configured" }, 500);
@@ -116,6 +116,6 @@ Deno.serve(async (req) => {
   if (upstream.status === 404) return json({ error: "not_found" }, 404);
   if (!upstream.ok) return json({ error: "upstream_error" }, 502);
   // Bulk endpoints return an array; wrap it so every response is an object.
-  const data = await upstream.json();
-  return json(Array.isArray(data) ? { results: data } : data);
+  const upstreamData = await upstream.json();
+  return json(Array.isArray(upstreamData) ? { results: upstreamData } : upstreamData);
 });

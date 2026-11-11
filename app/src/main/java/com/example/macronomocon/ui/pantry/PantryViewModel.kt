@@ -1,12 +1,12 @@
 package com.example.macronomocon.ui.pantry
 
 import com.example.macronomocon.data.repository.IngredientRepository
-import com.example.macronomocon.data.repository.PantryRepository
 import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.domain.factory.PantryItemFactory
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.ui.common.StateViewModel
 import com.example.macronomocon.ui.common.UiMessage
 import kotlinx.coroutines.CancellationException
@@ -21,7 +21,7 @@ data class PantryState(
 )
 
 class PantryViewModel(
-    private val repository: PantryRepository,
+    private val currentUser: () -> User?,
     private val ingredients: IngredientRepository,
     private val scanner: BarcodeScanner? = null,
     private val itemFactory: PantryItemFactory = PantryItemFactory()
@@ -29,6 +29,8 @@ class PantryViewModel(
     init {
         scanner?.let(::addCloseable)
     }
+
+    private fun pantry() = requireNotNull(currentUser()).pantry
 
     fun beginAdding() {
         clearError()
@@ -43,7 +45,7 @@ class PantryViewModel(
     }
 
     fun loadPantry() = action(UiMessage.ERROR_LOAD_YOUR_PANTRY) {
-        val pantry = repository.findPantry()
+        val pantry = pantry()
         updateData { it.copy(items = pantry.items) }
     }
 
@@ -112,25 +114,28 @@ class PantryViewModel(
 
     fun confirmAdd(item: PantryItem) = action(UiMessage.ERROR_ADD_THIS_PANTRY_ITEM) {
         require(data.selectedIngredient?.ingredientId == item.ingredient.ingredientId)
-        val pantry = repository.addItem(item)
+        val pantry = pantry()
+        pantry.addItem(item)
         updateData {
             it.copy(items = pantry.items, selectedIngredient = null, searchResults = emptyList())
         }
     }
 
     fun removeSelected(itemIds: Set<String>) = action(UiMessage.ERROR_REMOVE_PANTRY_ITEMS) {
-        val pantry = repository.removeItems(itemIds)
+        val pantry = pantry()
+        pantry.removeItems(pantry.items.filter { it.pantryItemId in itemIds })
         updateData { it.copy(items = pantry.items) }
     }
 
     fun removeExpired() = action(UiMessage.ERROR_REMOVE_EXPIRED_ITEMS) {
-        val current = repository.findPantry()
-        val pantry = repository.removeItems(current.getExpired().map { it.pantryItemId }.toSet())
+        val pantry = pantry()
+        pantry.removeItems(pantry.getExpired())
         updateData { it.copy(items = pantry.items) }
     }
 
     fun recordMeal(recipe: Recipe) = action(UiMessage.ERROR_RECORD_THIS_MEAL) {
-        val pantry = repository.recordMeal(recipe)
+        val pantry = pantry()
+        pantry.deductIngredients(recipe)
         updateData { it.copy(items = pantry.items) }
     }
 }

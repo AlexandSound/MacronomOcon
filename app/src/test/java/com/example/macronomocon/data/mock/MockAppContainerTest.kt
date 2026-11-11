@@ -3,6 +3,7 @@ package com.example.macronomocon.data.mock
 import com.example.macronomocon.domain.model.Difficulty
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.MealType
+import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.RecipeIngredient
@@ -39,27 +40,28 @@ class MockAppContainerTest {
     @Test
     fun mealDeductionIsAtomicAndReturnedPantriesAreSnapshots() = runTest {
         val container = MockAppContainer(seed)
-        val before = container.pantry.findPantry()
-        container.pantry.recordMeal(recipe)
+        val pantry = container.accounts.findUser()!!.pantry
+        val before = Pantry(pantry.items)
+        pantry.deductIngredients(recipe)
         assertEquals(150.0, before.items.single().quantity, 0.0)
-        assertEquals(50.0, container.pantry.findPantry().items.single().quantity, 0.0)
+        assertEquals(50.0, pantry.items.single().quantity, 0.0)
         try {
-            container.pantry.recordMeal(recipe)
+            pantry.deductIngredients(recipe)
             fail("Insufficient stock should fail")
         } catch (_: IllegalArgumentException) {
-            assertEquals(50.0, container.pantry.findPantry().items.single().quantity, 0.0)
+            assertEquals(50.0, pantry.items.single().quantity, 0.0)
         }
     }
 
     @Test
     fun commentsPersistAcrossReadsAndLikesRemainUnique() = runTest {
         val container = MockAppContainer(seed)
-        val comment = container.comments.publish(recipe.recipeId, "Tasty", null)
-        container.comments.like(comment.commentId)
-        container.comments.like(comment.commentId)
-        assertEquals(1, container.comments.findByRecipe(recipe.recipeId).single().likeCount())
-        container.comments.delete(comment.commentId)
-        assertTrue(container.comments.findByRecipe(recipe.recipeId).isEmpty())
+        var user = container.accounts.findUser()!!.publishComment(recipe.recipeId, "Tasty", null)
+        val comment = user.loadComments(recipe.recipeId).single()
+        user = user.likeComment(comment.commentId).likeComment(comment.commentId)
+        assertEquals(1, user.loadComments(recipe.recipeId).single().likeCount())
+        user = user.deleteComment(comment.commentId)
+        assertTrue(user.loadComments(recipe.recipeId).isEmpty())
     }
 
     @Test

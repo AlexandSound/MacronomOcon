@@ -112,6 +112,36 @@ class AccountViewModelTest {
         assertEquals(UiMessage.ERROR_SIGN_IN, vm.uiState.value.errorMessage)
     }
 
+    @Test
+    fun profileRefreshPreservesCommentsAndPantryForSameAccount() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        val pantry = requireNotNull(vm.user).pantry
+        vm.loadComments("recipe").join()
+        vm.publishComment("Helpful recipe").join()
+        vm.updatePreferences(UserPreferences()).join()
+        vm.loadAccount().join()
+        assertTrue(pantry === requireNotNull(vm.user).pantry)
+        assertEquals("Helpful recipe", requireNotNull(vm.user).loadComments("recipe").single().text)
+        val comment = requireNotNull(vm.user).comments.single()
+        vm.likeComment(comment).join()
+        vm.deleteComment(comment).join()
+        assertTrue(requireNotNull(vm.user).comments.isEmpty())
+    }
+
+    @Test
+    fun changedAccountDoesNotInheritPreviousSessionCommentsOrPantry() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        val pantry = requireNotNull(vm.user).pantry
+        vm.loadComments("recipe").join()
+        vm.publishComment("Private session comment").join()
+        repository.current = User("other-id", "other@example.com", "Other")
+        vm.loadAccount().join()
+        assertTrue(requireNotNull(vm.user).comments.isEmpty())
+        assertTrue(pantry !== requireNotNull(vm.user).pantry)
+    }
+
     private class FakeAccounts : AccountRepository {
         override val signedOutEvents = MutableSharedFlow<Unit>()
         override val signedInEvents = MutableSharedFlow<Unit>()

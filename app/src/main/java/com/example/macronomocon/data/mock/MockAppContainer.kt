@@ -2,25 +2,19 @@ package com.example.macronomocon.data.mock
 
 import android.content.res.Resources
 import androidx.annotation.VisibleForTesting
-import com.example.macronomocon.data.api.IngredientApiClient
 import com.example.macronomocon.data.api.RecipeApiClient
 import com.example.macronomocon.data.repository.AccountRepository
-import com.example.macronomocon.data.repository.CommentRepository
 import com.example.macronomocon.data.repository.IngredientRepository
-import com.example.macronomocon.data.repository.PantryRepository
 import com.example.macronomocon.data.repository.RecipeRepository
 import com.example.macronomocon.data.repository.RecipeUserDataSource
 import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.di.AppContainer
 import com.example.macronomocon.domain.model.AuthenticationResult
-import com.example.macronomocon.domain.model.Comment
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Pantry
-import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
-import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -43,17 +37,17 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
     }
 
     private val lock = Mutex()
-    private var user: User? = seed.user
-    private val inventory = Pantry(seed.pantryItems)
+    private fun initialUser() =
+        seed.user.copy(pantry = Pantry(seed.pantryItems), comments = seed.comments.toList())
+    private var user: User? = initialUser()
     private val catalog = seed.recipes.associateBy { it.recipeId }.toMutableMap()
-    private val discussion = seed.comments.associateBy { it.commentId }.toMutableMap()
 
     override val accounts = object : AccountRepository {
         override suspend fun register(email: String, password: String) = lock.withLock {
-            user = seed.user.copy(email = email)
+            user = initialUser().copy(email = email)
         }
         override suspend fun authenticate(email: String, password: String) = lock.withLock {
-            val profile = (user ?: seed.user).copy(email = email)
+            val profile = (user ?: initialUser()).copy(email = email)
             user = profile
             AuthenticationResult.SignedIn(profile)
         }
@@ -69,31 +63,9 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
         }
         override suspend fun deleteUser() = lock.withLock {
             user = null
-            inventory.removeItems(inventory.items)
-            discussion.clear()
         }
     }
-    override val pantry = object : PantryRepository {
-        override suspend fun findPantry(): Pantry = lock.withLock { Pantry(inventory.items) }
-        override suspend fun addItem(item: PantryItem): Pantry = lock.withLock {
-            inventory.addItem(item)
-            Pantry(inventory.items)
-        }
-        override suspend fun removeItems(itemIds: Set<String>): Pantry = lock.withLock {
-            inventory.removeItems(inventory.items.filter { it.pantryItemId in itemIds })
-            Pantry(inventory.items)
-        }
-        override suspend fun recordMeal(recipe: Recipe): Pantry = lock.withLock {
-            inventory.deductIngredients(recipe)
-            Pantry(inventory.items)
-        }
-    }
-    override val ingredients = IngredientRepository(object : IngredientApiClient {
-        override suspend fun lookupBarcode(barcode: String): List<Ingredient> =
-            seed.ingredients.filter { it.barcode == barcode }
-        override suspend fun searchIngredients(query: String): List<Ingredient> =
-            seed.ingredients.filter { it.name.contains(query, ignoreCase = true) }
-    })
+    override val ingredients = IngredientRepository(MockIngredientApiFactory(seed.ingredients))
     override val recipes = RecipeRepository(
         object : RecipeApiClient {
             override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> =
@@ -131,36 +103,5 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
                 SHARE_BASE_URL + recipeId
         }
     )
-    override val comments = object : CommentRepository {
-        override suspend fun findByRecipe(recipeId: String): List<Comment> = lock.withLock {
-            discussion.values.filter { it.recipeId == recipeId }.sortedBy { it.timestamp }
-        }
-        override suspend fun publish(recipeId: String, text: String, imageUrl: String?): Comment =
-            lock.withLock {
-                require(catalog.containsKey(recipeId))
-                val comment =
-                    Comment(
-                        UUID.randomUUID().toString(),
-                        recipeId,
-                        requireNotNull(user).userId,
-                        text,
-                        imageUrl
-                    )
-                discussion[comment.commentId] = comment
-                comment
-            }
-        override suspend fun delete(commentId: String) = lock.withLock {
-            require(requireNotNull(discussion[commentId]).isAuthor(requireNotNull(user)))
-            discussion.remove(commentId)
-            Unit
-        }
-        override suspend fun like(commentId: String): Comment = lock.withLock {
-            requireNotNull(discussion[commentId]).like(requireNotNull(user)).also {
-                discussion[commentId] =
-                    it
-            }
-        }
-    }
-
     override fun barcodeScanner(): BarcodeScanner = DemoBarcodeScanner(MockSeed.DEMO_BARCODE)
 }

@@ -30,7 +30,7 @@ import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.User
-import com.example.macronomocon.ui.comment.CommentState
+import com.example.macronomocon.ui.account.CommentState
 import com.example.macronomocon.ui.common.ViewState
 import com.example.macronomocon.ui.components.RecipeSymbol
 import com.example.macronomocon.ui.components.StateFeedback

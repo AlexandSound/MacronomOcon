@@ -53,7 +53,8 @@ import com.example.macronomocon.di.AppContainer
 import com.example.macronomocon.di.viewModelFactory
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.ui.account.AccountViewModel
-import com.example.macronomocon.ui.comment.CommentViewModel
+import com.example.macronomocon.ui.account.CommentState
+import com.example.macronomocon.ui.common.ViewState
 import com.example.macronomocon.ui.components.StateFeedback
 import com.example.macronomocon.ui.pantry.PantryViewModel
 import com.example.macronomocon.ui.recipe.RecipeViewModel
@@ -103,18 +104,29 @@ fun MacronomoconApp(container: AppContainer) {
 
 @Composable
 private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
-    val factory = remember(container) { container.viewModelFactory() }
+    val factory = remember(container, account) {
+        container.viewModelFactory { account.uiState.value.data.user }
+    }
     val pantry: PantryViewModel = viewModel(factory = factory)
     val recipes: RecipeViewModel = viewModel(factory = factory)
     val kitchenRecipes: RecipeViewModel =
         viewModel(key = Destination.KITCHEN.name, factory = factory)
-    val comments: CommentViewModel = viewModel(factory = factory)
     val pantryState by pantry.uiState.collectAsStateWithLifecycle()
     val recipeState by recipes.uiState.collectAsStateWithLifecycle()
     val kitchenRecipeState by kitchenRecipes.uiState.collectAsStateWithLifecycle()
     val accountState by account.uiState.collectAsStateWithLifecycle()
     val favoriteIds = accountState.data.user?.favoriteRecipeIds.orEmpty()
-    val commentState by comments.uiState.collectAsStateWithLifecycle()
+    val commentRecipeId = accountState.data.commentRecipeId
+    val commentState = ViewState(
+        CommentState(
+            commentRecipeId,
+            commentRecipeId?.let {
+                accountState.data.user?.loadComments(it)
+            }.orEmpty()
+        ),
+        accountState.isLoading,
+        accountState.errorMessage
+    )
     var destination by rememberSaveable { mutableStateOf(Destination.KITCHEN) }
     var filter by rememberSaveable { mutableStateOf(RecipeFilter.ALL) }
     // Keep the selected recipe ID across recreation.
@@ -149,7 +161,7 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
     LaunchedEffect(detailKey) {
         detailKey?.let {
             recipes.loadRecipe(it)
-            comments.loadComments(it)
+            account.loadComments(it)
         }
     }
     BackHandler(enabled = detailKey != null || destination != Destination.KITCHEN) {
@@ -205,12 +217,12 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
                                         }
                                     },
                                     onPublish = {
-                                        comments.publishComment(it).join()
-                                        comments.uiState.value.errorMessage == null
-                                    }, onLike = { comments.likeComment(it) },
+                                        account.publishComment(it).join()
+                                        account.uiState.value.errorMessage == null
+                                    }, onLike = { account.likeComment(it) },
                                     onDelete = {
-                                        comments.deleteComment(it)
-                                    }, onDismissError = comments::clearError
+                                        account.deleteComment(it)
+                                    }, onDismissError = account::clearError
                                 )
                             }
                         }

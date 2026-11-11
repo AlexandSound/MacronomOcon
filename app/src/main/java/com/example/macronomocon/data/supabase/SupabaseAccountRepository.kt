@@ -5,7 +5,6 @@ import com.example.macronomocon.domain.model.AccountException
 import com.example.macronomocon.domain.model.AuthenticationResult
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
-import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthErrorCode
 import io.github.jan.supabase.auth.exception.AuthRestException
@@ -13,12 +12,10 @@ import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionSource
 import io.github.jan.supabase.auth.status.SessionStatus
-import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -26,7 +23,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-class SupabaseAccountRepository(private val client: SupabaseClient) : AccountRepository {
+class SupabaseAccountRepository(private val connection: SupabaseConnection) : AccountRepository {
+    private val client get() = connection.client
     override val signedOutEvents = client.auth.sessionStatus
         .filterIsInstance<SessionStatus.NotAuthenticated>().map { Unit }
 
@@ -62,9 +60,9 @@ class SupabaseAccountRepository(private val client: SupabaseClient) : AccountRep
     override suspend fun findUser(): User? {
         client.auth.awaitInitialization()
         val session = client.auth.currentUserOrNull() ?: return null
-        val profile = client.from("profiles").select {
-            filter { eq("user_id", session.id) }
-        }.decodeList<JsonObject>().firstOrNull()
+        val profile = connection.createQuery(
+            "profiles"
+        ).select(mapOf("user_id" to session.id)).firstOrNull()
         fun strings(key: String) =
             profile?.get(key)?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
         return User(
@@ -79,15 +77,15 @@ class SupabaseAccountRepository(private val client: SupabaseClient) : AccountRep
                 notificationsEnabled =
                 profile?.get("notifications_enabled")?.jsonPrimitive?.booleanOrNull ?: true
             ),
-            favoriteRecipeIds = bookmarkIds(client, "favorite"),
-            blockedRecipeIds = bookmarkIds(client, "blocked")
+            favoriteRecipeIds = bookmarkIds(connection, "favorite"),
+            blockedRecipeIds = bookmarkIds(connection, "blocked")
         )
     }
 
     override suspend fun saveUser(user: User): User {
         val id = requireNotNull(client.auth.currentUserOrNull()).id
         require(id == user.userId)
-        client.from("profiles").upsert(
+        connection.createQuery("profiles").upsert(
             buildJsonObject {
                 put("user_id", id)
                 put("display_name", user.displayName)

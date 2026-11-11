@@ -28,7 +28,7 @@ import com.example.macronomocon.ui.components.ScreenHeading
 import com.example.macronomocon.ui.components.StateFeedback
 import com.example.macronomocon.ui.recipe.RecipeState
 
-enum class RecipeFilter { ALL, SAVED, QUICK }
+enum class RecipeFilter { ALL, SAVED }
 
 @Composable
 fun RecipesScreen(
@@ -46,7 +46,6 @@ fun RecipesScreen(
         when (filter) {
             RecipeFilter.ALL -> true
             RecipeFilter.SAVED -> recipe.recipeId in favorites
-            RecipeFilter.QUICK -> recipe.isQuick()
         }
     }
     LazyColumn(
@@ -80,10 +79,6 @@ fun RecipesScreen(
                             when (option) {
                                 RecipeFilter.ALL -> stringResource(R.string.for_you)
                                 RecipeFilter.SAVED -> stringResource(R.string.saved_recipes)
-                                RecipeFilter.QUICK -> stringResource(
-                                    R.string.quick_recipes,
-                                    Recipe.QUICK_MAX_MINUTES
-                                )
                             }
                         )
                     })
