@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,16 +74,24 @@ fun RecipesScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RecipeFilter.entries.forEach { option ->
-                    FilterChip(selected = filter == option, onClick = {
-                        onFilter(option)
-                    }, label = {
-                        Text(
-                            when (option) {
-                                RecipeFilter.ALL -> stringResource(R.string.for_you)
-                                RecipeFilter.SAVED -> stringResource(R.string.saved_recipes)
-                            }
-                        )
-                    })
+                    FilterChip(
+                        selected = filter == option,
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = filter == option,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary,
+                            selectedBorderWidth = 2.dp
+                        ),
+                        onClick = { onFilter(option) },
+                        label = {
+                            Text(
+                                when (option) {
+                                    RecipeFilter.ALL -> stringResource(R.string.for_you)
+                                    RecipeFilter.SAVED -> stringResource(R.string.saved_recipes)
+                                }
+                            )
+                        }
+                    )
                 }
             }
         }

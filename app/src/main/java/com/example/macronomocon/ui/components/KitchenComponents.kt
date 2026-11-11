@@ -60,13 +60,17 @@ fun WarmButton(
         if (hovered) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         label = "buttonColor"
     )
+    val contentColor by animateColorAsState(
+        if (hovered) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
+        label = "buttonContentColor"
+    )
     val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "buttonScale")
     Button(
         onClick = onClick,
         enabled = enabled,
         interactionSource = interaction,
         shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color),
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = contentColor),
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 0.dp,
             hoveredElevation = 5.dp
@@ -84,7 +88,7 @@ fun ScreenHeading(title: String, subtitle: String) {
         Text(
             stringResource(R.string.brand_eyebrow),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(title, style = MaterialTheme.typography.headlineLarge)
         Text(
@@ -97,7 +101,13 @@ fun ScreenHeading(title: String, subtitle: String) {
 
 @Composable
 fun <T> StateFeedback(state: ViewState<T>, onDismiss: () -> Unit) {
-    if (state.isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    if (state.isLoading) {
+        LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.onSurface,
+            trackColor = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
     state.errorMessage?.let { message ->
         Surface(
             color = MaterialTheme.colorScheme.errorContainer,
@@ -130,7 +140,10 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
         onClick = onClick,
         interactionSource = interaction,
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (hovered) 6.dp else 0.dp),
         modifier = Modifier.fillMaxWidth().hoverable(interaction)
     ) {
@@ -140,7 +153,7 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
                 Text(
                     stringResource(R.string.recipe_time, recipe.totalTime()),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     difficultyLabel(recipe.difficulty),
@@ -167,13 +180,13 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
 @Composable
 fun RecipeSymbol(modifier: Modifier = Modifier) {
     Box(
-        modifier.background(MaterialTheme.colorScheme.secondaryContainer),
+        modifier.background(MaterialTheme.colorScheme.outlineVariant),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             painterResource(R.drawable.ic_restaurant),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(56.dp)
         )
     }

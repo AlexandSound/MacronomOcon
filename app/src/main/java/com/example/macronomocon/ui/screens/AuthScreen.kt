@@ -54,7 +54,7 @@ fun AuthScreen(
                     style = MaterialTheme.typography.bodyLarge
                 )
                 if (checkingSession) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onSurface)
                     Text(stringResource(R.string.auth_restoring_session))
                 } else {
                     StateFeedback(state, onDismiss)

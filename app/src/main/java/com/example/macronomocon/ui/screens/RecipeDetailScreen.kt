@@ -66,7 +66,7 @@ fun RecipeDetailScreen(
                 Text(recipe.name, style = MaterialTheme.typography.headlineLarge)
                 Text(
                     stringResource(R.string.recipe_time, recipe.totalTime()),
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 TextButton(onClick = onFavorite, enabled = !busy && user != null) {
                     Text(
@@ -178,7 +178,7 @@ private fun InstructionStep(number: Int, instruction: String) {
         Text(
             stringResource(R.string.step_number, number),
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(instruction, style = MaterialTheme.typography.bodyLarge)
     }

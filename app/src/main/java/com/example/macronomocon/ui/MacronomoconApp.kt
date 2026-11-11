@@ -26,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -370,13 +371,20 @@ private fun KitchenTopBar(showBack: Boolean, onBack: () -> Unit) {
 
 @Composable
 private fun KitchenBottomBar(selected: Destination, onSelect: (Destination) -> Unit) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
         Destination.entries.forEach { destination ->
             NavigationBarItem(
                 selected = destination == selected,
                 onClick = { onSelect(destination) },
                 icon = { Icon(painterResource(destination.icon), contentDescription = null) },
-                label = { Text(stringResource(destination.label)) }
+                label = { Text(stringResource(destination.label)) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    indicatorColor = MaterialTheme.colorScheme.outlineVariant,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             )
         }
     }

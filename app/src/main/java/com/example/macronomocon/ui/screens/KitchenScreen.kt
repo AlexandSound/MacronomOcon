@@ -87,7 +87,8 @@ fun KitchenScreen(
 @Composable
 private fun PantrySummary(items: List<PantryItem>, openPantry: () -> Unit) {
     Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(
@@ -97,7 +98,7 @@ private fun PantrySummary(items: List<PantryItem>, openPantry: () -> Unit) {
             Text(
                 pluralStringResource(R.plurals.pantry_count, items.size, items.size),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 stringResource(
@@ -106,7 +107,7 @@ private fun PantrySummary(items: List<PantryItem>, openPantry: () -> Unit) {
                         it.isExpiringWithin(PantryItem.EXPIRING_SOON_DAYS)
                     }
                 ),
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onSurface
             )
             TextButton(onClick = openPantry) { Text(stringResource(R.string.open_pantry)) }
         }
