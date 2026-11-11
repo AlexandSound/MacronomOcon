@@ -87,9 +87,8 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
             override suspend fun blockedRecipeIds(): Set<String> = lock.withLock {
                 user?.blockedRecipeIds.orEmpty()
             }
-            override suspend fun setFavorite(recipeId: String, value: Boolean) = lock.withLock {
+            override suspend fun setFavorite(recipe: Recipe, value: Boolean) = lock.withLock {
                 val profile = requireNotNull(user)
-                val recipe = requireNotNull(catalog[recipeId])
                 user = if (value) profile.favorite(recipe) else profile.unfavorite(recipe)
             }
             override suspend fun blockRecipe(recipeId: String) = lock.withLock {

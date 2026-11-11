@@ -31,9 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -149,7 +149,7 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = if (hovered) 6.dp else 0.dp),
         modifier = Modifier.fillMaxWidth().hoverable(interaction)
     ) {
-        RecipeSymbol(Modifier.fillMaxWidth().height(150.dp), recipe.imageUrl )
+        RecipeSymbol(recipe.imageUrl, Modifier.fillMaxWidth().height(150.dp))
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
@@ -178,14 +178,14 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
     }
 }
 
-/** Placeholder until recipe photos exist: a decorative Android/Material symbol, never generated art. */
+/** Recipe photo from [imageUrl], drawn over a decorative symbol shown while loading or without one. */
 @Composable
-fun RecipeSymbol(modifier: Modifier = Modifier, imageUrl: String?) {
+fun RecipeSymbol(imageUrl: String?, modifier: Modifier = Modifier) {
     Box(
         modifier.background(MaterialTheme.colorScheme.outlineVariant),
         contentAlignment = Alignment.Center
     ) {
-        Icon(painterResource(R.drawable.ic_restaurant), null, Modifier.size(56.dp))   // fallback underneath
+        Icon(painterResource(R.drawable.ic_restaurant), null, Modifier.size(56.dp))
         AsyncImage(
             model = imageUrl,
             contentDescription = null,

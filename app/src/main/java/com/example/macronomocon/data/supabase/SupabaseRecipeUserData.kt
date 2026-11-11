@@ -16,8 +16,11 @@ class SupabaseRecipeUserData(private val connection: SupabaseConnection) : Recip
 
     override suspend fun blockedRecipeIds(): Set<String> = bookmarkIds(connection, "blocked")
 
-    override suspend fun setFavorite(recipeId: String, value: Boolean) =
-        upsert(recipeId) { put("favorite", value) }
+    override suspend fun setFavorite(recipe: Recipe, value: Boolean) = upsert(recipe.recipeId) {
+        put("favorite", value)
+        put("title", recipe.name)
+        put("image_url", recipe.imageUrl.orEmpty())
+    }
 
     override suspend fun blockRecipe(recipeId: String) = upsert(recipeId) { put("blocked", true) }
 
