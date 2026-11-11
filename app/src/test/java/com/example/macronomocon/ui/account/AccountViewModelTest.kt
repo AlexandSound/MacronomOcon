@@ -3,6 +3,7 @@ package com.example.macronomocon.ui.account
 import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.domain.model.AccountException
 import com.example.macronomocon.domain.model.AuthenticationResult
+import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.common.UiMessage
@@ -176,5 +177,8 @@ class AccountViewModelTest {
         override suspend fun deleteUser() {
             current = null
         }
+        override suspend fun loadPantryItems(): List<PantryItem> = emptyList()
+        override suspend fun savePantryItem(item: PantryItem) = Unit
+        override suspend fun deletePantryItem(item: PantryItem) = Unit
     }
 }

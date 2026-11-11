@@ -2,12 +2,15 @@ package com.example.macronomocon.ui.pantry
 
 import com.example.macronomocon.data.api.IngredientApiClient
 import com.example.macronomocon.data.api.IngredientApiFactory
+import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.data.repository.IngredientRepository
 import com.example.macronomocon.data.scanner.BarcodeScanner
+import com.example.macronomocon.domain.model.AuthenticationResult
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.User
+import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.common.UiMessage
 import java.io.IOException
 import java.time.LocalDate
@@ -36,6 +39,26 @@ class PantryViewModelTest {
     }
     private val pantry = Pantry()
     private val user = User("user", "a@example.com", "A", pantry = pantry)
+    private val saved = mutableListOf<PantryItem>()
+    private val deleted = mutableListOf<PantryItem>()
+    private val accounts = object : AccountRepository {
+        override suspend fun register(email: String, password: String) = Unit
+        override suspend fun authenticate(email: String, password: String) =
+            AuthenticationResult.SignedIn(user)
+        override suspend fun verifyOtp(code: String) = user
+        override suspend fun signOut() = Unit
+        override suspend fun findUser() = user
+        override suspend fun saveUser(user: User) = user
+        override suspend fun savePreferences(preferences: UserPreferences) = user
+        override suspend fun deleteUser() = Unit
+        override suspend fun loadPantryItems() = pantry.items
+        override suspend fun savePantryItem(item: PantryItem) {
+            saved += item
+        }
+        override suspend fun deletePantryItem(item: PantryItem) {
+            deleted += item
+        }
+    }
     private val factory = object : IngredientApiFactory {
         override fun createClient(): IngredientApiClient = api
     }
@@ -49,7 +72,7 @@ class PantryViewModelTest {
     @Test
     fun failedBarcodeLookupAllowsSearchSelectionAndConfirmation() = runTest(dispatcher) {
         lookup = { throw IOException("offline") }
-        val vm = PantryViewModel({ user }, IngredientRepository(factory))
+        val vm = PantryViewModel({ user }, accounts, IngredientRepository(factory))
         vm.identifyBarcode(ingredient.barcode)
         advanceUntilIdle()
         assertTrue(vm.uiState.value.data.showIngredientSearch)
@@ -63,13 +86,14 @@ class PantryViewModelTest {
         vm.confirmAdd(item)
         advanceUntilIdle()
         assertEquals(listOf(item), vm.uiState.value.data.items)
+        assertEquals(listOf(item), saved)
         assertNull(vm.uiState.value.data.selectedIngredient)
         assertNull(vm.uiState.value.errorMessage)
     }
 
     @Test
     fun missingOrUnmatchedCodeEnablesFallback() = runTest(dispatcher) {
-        val vm = PantryViewModel({ user }, IngredientRepository(factory))
+        val vm = PantryViewModel({ user }, accounts, IngredientRepository(factory))
         vm.identifyBarcode(null)
         advanceUntilIdle()
         assertTrue(vm.uiState.value.data.showIngredientSearch)
@@ -82,7 +106,7 @@ class PantryViewModelTest {
 
     @Test
     fun successfulLookupWaitsForConfirmationBeforeAddingStock() = runTest(dispatcher) {
-        val vm = PantryViewModel({ user }, IngredientRepository(factory))
+        val vm = PantryViewModel({ user }, accounts, IngredientRepository(factory))
         vm.identifyBarcode(ingredient.barcode)
         advanceUntilIdle()
         assertEquals(listOf(ingredient), vm.uiState.value.data.searchResults)
@@ -93,7 +117,7 @@ class PantryViewModelTest {
     @Test
     fun cancellationIsNotReportedAsScanFailure() = runTest(dispatcher) {
         lookup = { throw CancellationException() }
-        val vm = PantryViewModel({ user }, IngredientRepository(factory))
+        val vm = PantryViewModel({ user }, accounts, IngredientRepository(factory))
         vm.identifyBarcode(ingredient.barcode)
         advanceUntilIdle()
         assertNull(vm.uiState.value.errorMessage)
@@ -106,7 +130,7 @@ class PantryViewModelTest {
         val scanner = object : BarcodeScanner {
             override suspend fun scan(): String = ingredient.barcode
         }
-        val vm = PantryViewModel({ user }, IngredientRepository(factory), scanner)
+        val vm = PantryViewModel({ user }, accounts, IngredientRepository(factory), scanner)
         vm.scanBarcode()
         advanceUntilIdle()
         assertEquals(listOf(ingredient), vm.uiState.value.data.searchResults)
@@ -122,7 +146,7 @@ class PantryViewModelTest {
 
     @Test
     fun missingScannerFallsBackToSearch() = runTest(dispatcher) {
-        val vm = PantryViewModel({ user }, IngredientRepository(factory))
+        val vm = PantryViewModel({ user }, accounts, IngredientRepository(factory))
         vm.scanBarcode()
         advanceUntilIdle()
         assertTrue(vm.uiState.value.data.showIngredientSearch)

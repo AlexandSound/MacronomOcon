@@ -1,6 +1,7 @@
 package com.example.macronomocon.data.repository
 
 import com.example.macronomocon.domain.model.AuthenticationResult
+import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
 
@@ -23,4 +24,9 @@ interface AccountRepository {
     suspend fun saveUser(user: User): User
     suspend fun savePreferences(preferences: UserPreferences): User
     suspend fun deleteUser()
+
+    /** The pantry is part of the User, so its items are persisted through this repository. */
+    suspend fun loadPantryItems(): List<PantryItem>
+    suspend fun savePantryItem(item: PantryItem)
+    suspend fun deletePantryItem(item: PantryItem)
 }

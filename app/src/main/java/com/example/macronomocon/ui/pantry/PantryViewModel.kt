@@ -1,9 +1,11 @@
 package com.example.macronomocon.ui.pantry
 
+import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.data.repository.IngredientRepository
 import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.domain.factory.PantryItemFactory
 import com.example.macronomocon.domain.model.Ingredient
+import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.User
@@ -22,6 +24,7 @@ data class PantryState(
 
 class PantryViewModel(
     private val currentUser: () -> User?,
+    private val accounts: AccountRepository,
     private val ingredients: IngredientRepository,
     private val scanner: BarcodeScanner? = null,
     private val itemFactory: PantryItemFactory = PantryItemFactory()
@@ -115,6 +118,7 @@ class PantryViewModel(
     fun confirmAdd(item: PantryItem) = action(UiMessage.ERROR_ADD_THIS_PANTRY_ITEM) {
         require(data.selectedIngredient?.ingredientId == item.ingredient.ingredientId)
         val pantry = pantry()
+        accounts.savePantryItem(item)
         pantry.addItem(item)
         updateData {
             it.copy(items = pantry.items, selectedIngredient = null, searchResults = emptyList())
@@ -123,18 +127,28 @@ class PantryViewModel(
 
     fun removeSelected(itemIds: Set<String>) = action(UiMessage.ERROR_REMOVE_PANTRY_ITEMS) {
         val pantry = pantry()
-        pantry.removeItems(pantry.items.filter { it.pantryItemId in itemIds })
+        val removed = pantry.items.filter { it.pantryItemId in itemIds }
+        removed.forEach { accounts.deletePantryItem(it) }
+        pantry.removeItems(removed)
         updateData { it.copy(items = pantry.items) }
     }
 
     fun removeExpired() = action(UiMessage.ERROR_REMOVE_EXPIRED_ITEMS) {
         val pantry = pantry()
-        pantry.removeItems(pantry.getExpired())
+        val expired = pantry.getExpired()
+        expired.forEach { accounts.deletePantryItem(it) }
+        pantry.removeItems(expired)
         updateData { it.copy(items = pantry.items) }
     }
 
     fun recordMeal(recipe: Recipe) = action(UiMessage.ERROR_RECORD_THIS_MEAL) {
         val pantry = pantry()
+        // Deduct on a copy first so the database is updated before the session's pantry changes.
+        val after = Pantry(pantry.items).apply { deductIngredients(recipe) }.items
+        val remainingIds = after.map { it.pantryItemId }.toSet()
+        pantry.items.filter { it.pantryItemId !in remainingIds }
+            .forEach { accounts.deletePantryItem(it) }
+        after.filter { it !in pantry.items }.forEach { accounts.savePantryItem(it) }
         pantry.deductIngredients(recipe)
         updateData { it.copy(items = pantry.items) }
     }

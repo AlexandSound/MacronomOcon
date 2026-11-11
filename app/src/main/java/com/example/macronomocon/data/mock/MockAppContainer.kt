@@ -12,6 +12,7 @@ import com.example.macronomocon.di.AppContainer
 import com.example.macronomocon.domain.model.AuthenticationResult
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Pantry
+import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
@@ -64,6 +65,13 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
         override suspend fun deleteUser() = lock.withLock {
             user = null
         }
+
+        // The pantry already lives on the in-memory User, so there is nothing else to persist.
+        override suspend fun loadPantryItems(): List<PantryItem> = lock.withLock {
+            user?.pantry?.items.orEmpty()
+        }
+        override suspend fun savePantryItem(item: PantryItem) = Unit
+        override suspend fun deletePantryItem(item: PantryItem) = Unit
     }
     override val ingredients = IngredientRepository(MockIngredientApiFactory(seed.ingredients))
     override val recipes = RecipeRepository(

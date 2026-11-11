@@ -34,7 +34,13 @@ fun AppContainer.viewModelFactory(currentUser: () -> User? = { null }): ViewMode
     buildViewModelFactory {
         initializer { AccountViewModel(accounts) }
         initializer {
-            PantryViewModel(currentUser, ingredients, barcodeScanner(), PantryItemFactory())
+            PantryViewModel(
+                currentUser,
+                accounts,
+                ingredients,
+                barcodeScanner(),
+                PantryItemFactory()
+            )
         }
         initializer { RecipeViewModel(recipes) }
     }

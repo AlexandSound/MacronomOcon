@@ -20,4 +20,12 @@ class SupabaseQuery(private val supabase: SupabaseConnection, override val table
             if (onConflict != null) this.onConflict = onConflict
         }
     }
+
+    override suspend fun delete(filters: Map<String, String>) {
+        supabase.client.from(table).delete {
+            filter {
+                filters.forEach { (column, value) -> eq(column, value) }
+            }
+        }
+    }
 }
