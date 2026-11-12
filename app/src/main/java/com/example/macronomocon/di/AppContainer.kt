@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.macronomocon.data.repository.AccountRepository
+import com.example.macronomocon.data.repository.CommentImageStore
 import com.example.macronomocon.data.repository.CommentRepository
 import com.example.macronomocon.data.repository.IngredientRepository
 import com.example.macronomocon.data.repository.PantryRepository
@@ -26,6 +27,9 @@ interface AppContainer {
     val recipes: RecipeRepository
     val comments: CommentRepository
 
+    /** Null when photo uploads are unavailable; the comment composer then hides the photo picker. */
+    val commentImages: CommentImageStore? get() = null
+
     /** Factory method: each caller receives, owns, and closes its own scanner. */
     fun barcodeScanner(): BarcodeScanner
 
@@ -38,5 +42,5 @@ fun AppContainer.viewModelFactory(): ViewModelProvider.Factory = viewModelFactor
     initializer { AccountViewModel(accounts) }
     initializer { PantryViewModel(pantry, ingredients, barcodeScanner(), PantryItemFactory()) }
     initializer { RecipeViewModel(recipes) }
-    initializer { CommentViewModel(comments) }
+    initializer { CommentViewModel(comments, commentImages) }
 }

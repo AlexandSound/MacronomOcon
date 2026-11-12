@@ -7,6 +7,7 @@ import com.example.macronomocon.data.api.CachingRecipeApiClient
 import com.example.macronomocon.data.local.LocalCommentRepository
 import com.example.macronomocon.data.local.LocalPantryRepository
 import com.example.macronomocon.data.repository.AccountRepository
+import com.example.macronomocon.data.repository.CommentImageStore
 import com.example.macronomocon.data.repository.CommentRepository
 import com.example.macronomocon.data.repository.IngredientRepository
 import com.example.macronomocon.data.repository.PantryRepository
@@ -15,6 +16,7 @@ import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.data.scanner.GoogleCodeScanner
 import com.example.macronomocon.data.supabase.SpoonacularApiClient
 import com.example.macronomocon.data.supabase.SupabaseAccountRepository
+import com.example.macronomocon.data.supabase.SupabaseCommentImageStore
 import com.example.macronomocon.data.supabase.SupabaseRecipeUserData
 import com.example.macronomocon.domain.model.User
 import io.github.jan.supabase.auth.Auth
@@ -25,11 +27,12 @@ import io.github.jan.supabase.auth.handleDeeplinks
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.storage.Storage
 
 /**
- * Production composition root: Supabase accounts and bookmarks, Spoonacular recipes and
- * ingredients through the `spoonacular` Edge Function, and Google's barcode scanner. Pantry and
- * comments stay in memory until their server tables are connected.
+ * Production composition root: Supabase accounts, bookmarks, custom recipes and comment photos,
+ * Spoonacular recipes and ingredients through the `spoonacular` Edge Function, and Google's barcode
+ * scanner. Pantry and comments stay in memory until their server tables are connected.
  */
 class AuthAppContainer(private val context: Context) : AppContainer {
     override val liveAuth = true
@@ -51,6 +54,7 @@ class AuthAppContainer(private val context: Context) : AppContainer {
             }
             install(Postgrest)
             install(Functions)
+            install(Storage)
         }
     }
     private val spoonacular by lazy { SpoonacularApiClient(client) }
@@ -80,6 +84,9 @@ class AuthAppContainer(private val context: Context) : AppContainer {
     }
     override val pantry: PantryRepository = localPantry
     override val comments: CommentRepository = localComments
+    override val commentImages: CommentImageStore by lazy {
+        SupabaseCommentImageStore(client, context.contentResolver)
+    }
 
     override fun barcodeScanner(): BarcodeScanner = GoogleCodeScanner(context)
 
