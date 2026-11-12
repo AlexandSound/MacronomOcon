@@ -13,7 +13,16 @@ Tables:
 - `profiles`: display name and preferences. Client upserts its own profile after sign-in.
 - `pantry_items`: user-entered stock with quantity, unit, expiration, and barcode.
 - `recipe_bookmarks`: favorites/blocked flags and permitted recipe references.
-- `custom_recipes`: recipes authored by the user.
+- `custom_recipes`: recipes authored by the user. `20261112020000_custom_recipe_details.sql`
+  adds prep/cook time, difficulty, meal type, cuisine and tools. Postgres generates the UUID
+  `recipe_id`; the app treats UUID IDs as custom and numeric IDs as Spoonacular recipes.
+
+Storage (`20261112030000_comment_images_bucket.sql`):
+
+- `comment-images` bucket for comment photos: public read, 5 MB limit, JPEG/PNG/WebP.
+  Signed-in users can only upload to and delete from their own `<user_id>/` folder. The app
+  downscales photos to 1600 px and re-encodes them as JPEG (no EXIF/location) before upload.
+  Deleting a comment does not delete its photo yet.
 
 All tables use Supabase Auth user IDs and enforce owner-only reads and writes for
 authenticated clients. Anonymous access is revoked. Email/password and MFA belong
