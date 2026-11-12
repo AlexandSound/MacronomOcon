@@ -52,8 +52,9 @@ the comments migration manually, mark `20261112010000` applied before a later CL
   author names, comment IDs, or timestamps. Missing names use the localized UI fallback.
 - Text, an image URL, or both satisfy the SRS content rule. Photo uploading, image
   rendering, and storage-object cleanup remain the separate comment-photos task.
-- `SupabaseCommentRepository` replaces the local repository in `AuthAppContainer`.
-  Sign-out does not delete comments. Reopening a recipe reloads shared comments/likes;
+- `SupabaseAccountRepository` (wired in `AuthAppContainer`) reads and writes these tables;
+  `AccountViewModel` keeps the loaded comments on the signed-in `User`. Sign-out does not
+  delete comments. Reopening a recipe reloads shared comments/likes;
   this implementation does not subscribe to realtime updates.
 
 Recipe IDs reference the external recipe catalog, as bookmarks already do, rather
@@ -108,8 +109,8 @@ Favorites and blocks use `recipe_bookmarks`; Spoonacular recipe IDs are stored, 
 
 Remaining integration:
 
-- Pantry is in memory for the running app and starts empty. Connect
-  `pantry_items` once meal deductions run atomically on the server.
+- Pantry items persist to `pantry_items` through `SupabaseAccountRepository`. Recording a
+  meal writes each changed item separately; move deductions to an atomic server operation.
 - Barcode lookup uses Spoonacular's UPC endpoint and then ingredient search; Open Food Facts
   can replace or supplement it.
 - Spoonacular's free plan requires attribution; add it before publishing the app.
@@ -164,7 +165,7 @@ until a challenge screen is implemented. Hosted Auth settings were not changed.
 The Supabase SDK restores and refreshes sessions. Session preferences are excluded
 from Android cloud backup and device transfer. Passwords are transient Compose state
 and are cleared on submission. Profile preferences use the protected `profiles` table.
-Pantry remains local; recipes use Spoonacular and comments use the shared Supabase tables.
+Pantry items use `pantry_items`; recipes use Spoonacular and comments use the shared Supabase tables.
 The default mock container remains available to previews and existing UI tests.
 
 Validation should include confirmation-required registration, invalid credentials,

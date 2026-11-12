@@ -3,9 +3,12 @@ package com.example.macronomocon.ui.account
 import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.domain.model.AccountException
 import com.example.macronomocon.domain.model.AuthenticationResult
+import com.example.macronomocon.domain.model.Comment
+import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.common.UiMessage
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -112,6 +115,66 @@ class AccountViewModelTest {
         assertEquals(UiMessage.ERROR_SIGN_IN, vm.uiState.value.errorMessage)
     }
 
+    @Test
+    fun profileRefreshPreservesCommentsAndPantryForSameAccount() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        val pantry = requireNotNull(vm.user).pantry
+        vm.loadComments("recipe").join()
+        vm.publishComment("Helpful recipe").join()
+        vm.updatePreferences(UserPreferences()).join()
+        vm.loadAccount().join()
+        assertTrue(pantry === requireNotNull(vm.user).pantry)
+        val own = requireNotNull(vm.user).loadComments("recipe").single()
+        assertEquals("Helpful recipe", own.text)
+        assertEquals(own, repository.discussion.single())
+        vm.deleteComment(own).join()
+        assertTrue(requireNotNull(vm.user).comments.isEmpty())
+        assertTrue(repository.discussion.isEmpty())
+    }
+
+    @Test
+    fun loadedCommentsAreSharedAndOnlyOtherAuthorsCanBeLiked() = runTest(dispatcher) {
+        val neighbor = Comment("neighbor", "recipe", "neighbor-id", "Add lemon", authorName = "Sam")
+        repository.discussion += neighbor
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        vm.loadComments("recipe").join()
+        assertEquals(listOf(neighbor), requireNotNull(vm.user).loadComments("recipe"))
+        vm.likeComment(neighbor).join()
+        assertEquals(setOf("id"), requireNotNull(vm.user).comments.single().likedByUserIds)
+        vm.publishComment("Mine").join()
+        val own = requireNotNull(vm.user).loadComments("recipe").single { it.authorId == "id" }
+        vm.likeComment(own).join()
+        assertEquals(UiMessage.ERROR_LIKE_THIS_COMMENT, vm.uiState.value.errorMessage)
+        assertEquals(0, repository.discussion.single { it.commentId == own.commentId }.likeCount())
+        vm.deleteComment(neighbor).join()
+        assertEquals(UiMessage.ERROR_DELETE_THIS_COMMENT, vm.uiState.value.errorMessage)
+        assertTrue(neighbor.commentId in repository.discussion.map { it.commentId })
+    }
+
+    @Test
+    fun failedCommentLoadShowsSafeError() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        repository.fail = true
+        vm.loadComments("recipe").join()
+        assertEquals(UiMessage.ERROR_LOAD_COMMENTS, vm.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun changedAccountDoesNotInheritPreviousSessionCommentsOrPantry() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        val pantry = requireNotNull(vm.user).pantry
+        vm.loadComments("recipe").join()
+        vm.publishComment("Private session comment").join()
+        repository.current = User("other-id", "other@example.com", "Other")
+        vm.loadAccount().join()
+        assertTrue(requireNotNull(vm.user).comments.isEmpty())
+        assertTrue(pantry !== requireNotNull(vm.user).pantry)
+    }
+
     private class FakeAccounts : AccountRepository {
         override val signedOutEvents = MutableSharedFlow<Unit>()
         override val signedInEvents = MutableSharedFlow<Unit>()
@@ -145,6 +208,32 @@ class AccountViewModelTest {
             saveUser(requireNotNull(current).copy(preferences = preferences))
         override suspend fun deleteUser() {
             current = null
+        }
+        override suspend fun loadPantryItems(): List<PantryItem> = emptyList()
+        override suspend fun savePantryItem(item: PantryItem) = Unit
+        override suspend fun deletePantryItem(item: PantryItem) = Unit
+
+        /** Stands in for the shared server table: visible to every account. */
+        val discussion = mutableListOf<Comment>()
+        override suspend fun loadComments(recipeId: String): List<Comment> {
+            check(!fail) { "Sensitive transport error" }
+            return discussion.filter { it.recipeId == recipeId }
+        }
+        override suspend fun publishComment(
+            recipeId: String,
+            text: String,
+            imageUrl: String?
+        ): Comment {
+            val author = requireNotNull(current)
+            return Comment(UUID.randomUUID().toString(), recipeId, author.userId, text, imageUrl)
+                .also { discussion += it }
+        }
+        override suspend fun deleteComment(comment: Comment) {
+            check(discussion.removeAll { it.commentId == comment.commentId })
+        }
+        override suspend fun likeComment(comment: Comment): Comment {
+            val index = discussion.indexOfFirst { it.commentId == comment.commentId }
+            return discussion[index].like(requireNotNull(current)).also { discussion[index] = it }
         }
     }
 }

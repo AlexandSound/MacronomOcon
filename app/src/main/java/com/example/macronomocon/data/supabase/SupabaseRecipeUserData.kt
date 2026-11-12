@@ -2,25 +2,25 @@ package com.example.macronomocon.data.supabase
 
 import com.example.macronomocon.data.repository.RecipeUserDataSource
 import com.example.macronomocon.domain.model.Recipe
-import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.from
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /** Favorites and blocks in the owner-only `recipe_bookmarks` table. */
-class SupabaseRecipeUserData(private val client: SupabaseClient) : RecipeUserDataSource {
+class SupabaseRecipeUserData(private val connection: SupabaseConnection) : RecipeUserDataSource {
     companion object {
         const val TABLE = "recipe_bookmarks"
     }
 
-    override suspend fun blockedRecipeIds(): Set<String> = bookmarkIds(client, "blocked")
+    override suspend fun blockedRecipeIds(): Set<String> = bookmarkIds(connection, "blocked")
 
-    override suspend fun setFavorite(recipeId: String, value: Boolean) =
-        upsert(recipeId) { put("favorite", value) }
+    override suspend fun setFavorite(recipe: Recipe, value: Boolean) = upsert(recipe.recipeId) {
+        put("favorite", value)
+        put("title", recipe.name)
+        put("image_url", recipe.imageUrl.orEmpty())
+    }
 
     override suspend fun blockRecipe(recipeId: String) = upsert(recipeId) { put("blocked", true) }
 
@@ -32,22 +32,23 @@ class SupabaseRecipeUserData(private val client: SupabaseClient) : RecipeUserDat
         error("Recipe sharing is not available yet")
 
     private suspend fun upsert(recipeId: String, values: JsonObjectBuilder.() -> Unit) {
-        val userId = requireNotNull(client.auth.currentUserOrNull()).id
+        val userId = requireNotNull(connection.client.auth.currentUserOrNull()).id
         // Merges only the given columns, so favoriting never clears a block and vice versa.
-        client.from(TABLE).upsert(
+        connection.createQuery(TABLE).upsert(
             buildJsonObject {
                 put("user_id", userId)
                 put("recipe_id", recipeId)
                 values()
-            }
-        ) { onConflict = "user_id,recipe_id" }
+            },
+            onConflict = "user_id,recipe_id"
+        )
     }
 }
 
 /** IDs of the signed-in user's bookmarks where [column] is true. */
-internal suspend fun bookmarkIds(client: SupabaseClient, column: String): Set<String> =
-    client.from(SupabaseRecipeUserData.TABLE).select {
-        filter { eq(column, true) }
-    }.decodeList<JsonObject>().mapNotNull {
+internal suspend fun bookmarkIds(connection: SupabaseConnection, column: String): Set<String> =
+    connection.createQuery(
+        SupabaseRecipeUserData.TABLE
+    ).select(mapOf(column to "true")).mapNotNull {
         (it["recipe_id"] as? JsonPrimitive)?.content
     }.toSet()

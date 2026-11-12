@@ -10,7 +10,8 @@ data class Recipe(
     val mealType: MealType,
     val cuisine: String,
     val toolsNeeded: List<String>,
-    val requirements: List<RecipeIngredient> = emptyList()
+    val requirements: List<RecipeIngredient> = emptyList(),
+    val imageUrl: String? = null
 ) {
     companion object {
         /** Recipes with a total time under this many minutes count as quick. */

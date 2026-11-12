@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,12 +66,36 @@ fun PantryScreen(
         item { StateFeedback(state, onDismiss) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = !soonOnly, onClick = {
-                    soonOnly = false
-                }, label = { Text(stringResource(R.string.all_ingredients)) })
-                FilterChip(selected = soonOnly, onClick = {
-                    soonOnly = true
-                }, label = { Text(stringResource(R.string.use_soon)) })
+                FilterChip(
+                    selected = !soonOnly,
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = !soonOnly,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                        selectedBorderWidth = 2.dp
+                    ),
+                    onClick = {
+                        soonOnly = false
+                    },
+                    label = {
+                        Text(stringResource(R.string.all_ingredients))
+                    }
+                )
+                FilterChip(
+                    selected = soonOnly,
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = soonOnly,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                        selectedBorderWidth = 2.dp
+                    ),
+                    onClick = {
+                        soonOnly = true
+                    },
+                    label = {
+                        Text(stringResource(R.string.use_soon))
+                    }
+                )
             }
         }
         if (visible.isEmpty()) {
@@ -99,7 +124,11 @@ private fun PantryItemRow(item: PantryItem, enabled: Boolean, onRemove: () -> Un
             item.expirationDate.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
         )
     }
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(20.dp)) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = RoundedCornerShape(20.dp)
+    ) {
         Row(
             Modifier.fillMaxWidth().padding(18.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -116,7 +145,7 @@ private fun PantryItemRow(item: PantryItem, enabled: Boolean, onRemove: () -> Un
                     color = if (item.isExpired()) {
                         MaterialTheme.colorScheme.error
                     } else {
-                        MaterialTheme.colorScheme.secondary
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
             }

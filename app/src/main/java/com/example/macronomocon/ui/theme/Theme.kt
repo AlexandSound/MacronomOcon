@@ -8,25 +8,49 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
-    primary = Terracotta, onPrimary = Color.White,
-    primaryContainer = Peach, onPrimaryContainer = Color(0xFF432414),
-    secondary = Olive, onSecondary = Color.White,
-    secondaryContainer = Color(0xFFEAF2DA), onSecondaryContainer = Color(0xFF29321D),
-    tertiary = Color(0xFF96701F), onTertiary = Color.White,
-    background = Cream, onBackground = Espresso,
-    surface = Cream, onSurface = Espresso,
-    surfaceVariant = Color(0xFFF7ECDF), onSurfaceVariant = Color(0xFF66584C),
-    outline = Color(0xFF827366), outlineVariant = Color(0xFFE6D9CA)
+    primary = ButtonGreen, onPrimary = Color.White,
+    primaryContainer = Color.White, onPrimaryContainer = Color.Black,
+    secondary = ButtonGreenHover, onSecondary = Color.White,
+    secondaryContainer = Color.White, onSecondaryContainer = Color.Black,
+    tertiary = Color.Black, onTertiary = Color.White,
+    tertiaryContainer = Color.White, onTertiaryContainer = Color.Black,
+    background = Color.White, onBackground = Color.Black,
+    surface = Color.White, onSurface = Color.Black,
+    surfaceDim = Color.White, surfaceBright = Color.White,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color.White,
+    surfaceContainer = Color.White,
+    surfaceContainerHigh = Color.White,
+    surfaceContainerHighest = Color.White,
+    surfaceVariant = CardGrey, onSurfaceVariant = Color(0xFF505050),
+    surfaceTint = Color.Transparent,
+    inverseSurface = Color.Black, inverseOnSurface = Color.White,
+    inversePrimary = ButtonGreen,
+    outline = Color(0xFF767676),
+    outlineVariant = Color(0xFFCCCCCC)
 )
+
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFFFC2A8), onPrimary = Color(0xFF542612),
-    primaryContainer = Color(0xFF8A4529), onPrimaryContainer = Color(0xFFFFE4D6),
-    secondary = Color(0xFFD2DCB4), onSecondary = Color(0xFF2D371F),
-    secondaryContainer = Color(0xFF4B5A37), onSecondaryContainer = Color(0xFFEAF2D4),
-    background = Color(0xFF2A221D), onBackground = Color(0xFFFBEDE2),
-    surface = Color(0xFF2A221D), onSurface = Color(0xFFFBEDE2),
-    surfaceVariant = Color(0xFF4C4137), onSurfaceVariant = Color(0xFFE0D0C1),
-    outline = Color(0xFFB5A190), outlineVariant = Color(0xFF62544A)
+    primary = ButtonGreen, onPrimary = Color.White,
+    primaryContainer = Color.Black, onPrimaryContainer = Color.White,
+    secondary = ButtonGreenHover, onSecondary = Color.White,
+    secondaryContainer = Color.Black, onSecondaryContainer = Color.White,
+    tertiary = Color.White, onTertiary = Color.Black,
+    tertiaryContainer = Color.Black, onTertiaryContainer = Color.White,
+    background = Color.Black, onBackground = Color.White,
+    surface = Color.Black, onSurface = Color.White,
+    surfaceDim = Color.Black, surfaceBright = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color.Black,
+    surfaceContainer = Color.Black,
+    surfaceContainerHigh = Color.Black,
+    surfaceContainerHighest = Color.Black,
+    surfaceVariant = DarkCardGrey, onSurfaceVariant = Color(0xFFCCCCCC),
+    surfaceTint = Color.Transparent,
+    inverseSurface = Color.White, inverseOnSurface = Color.Black,
+    inversePrimary = ButtonGreen,
+    outline = Color(0xFF999999),
+    outlineVariant = Color(0xFF555555)
 )
 
 @Composable

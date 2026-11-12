@@ -1,9 +1,10 @@
 package com.example.macronomocon.data.repository
 
-import com.example.macronomocon.data.api.IngredientApiClient
+import com.example.macronomocon.data.api.IngredientApiFactory
 import com.example.macronomocon.domain.model.Ingredient
 
-class IngredientRepository(private val api: IngredientApiClient) {
+class IngredientRepository(factory: IngredientApiFactory) {
+    private val api = factory.createClient()
     suspend fun findByBarcode(barcode: String): List<Ingredient> {
         val code = barcode.trim()
         if (code.isEmpty()) return emptyList()

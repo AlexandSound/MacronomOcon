@@ -4,6 +4,7 @@ import com.example.macronomocon.domain.model.Comment
 import com.example.macronomocon.domain.model.Difficulty
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.MealType
+import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.RecipeIngredient
@@ -40,34 +41,65 @@ class MockAppContainerTest {
     @Test
     fun mealDeductionIsAtomicAndReturnedPantriesAreSnapshots() = runTest {
         val container = MockAppContainer(seed)
-        val before = container.pantry.findPantry()
-        container.pantry.recordMeal(recipe)
+        val pantry = container.accounts.findUser()!!.pantry
+        val before = Pantry(pantry.items)
+        pantry.deductIngredients(recipe)
         assertEquals(150.0, before.items.single().quantity, 0.0)
-        assertEquals(50.0, container.pantry.findPantry().items.single().quantity, 0.0)
+        assertEquals(50.0, pantry.items.single().quantity, 0.0)
         try {
-            container.pantry.recordMeal(recipe)
+            pantry.deductIngredients(recipe)
             fail("Insufficient stock should fail")
         } catch (_: IllegalArgumentException) {
-            assertEquals(50.0, container.pantry.findPantry().items.single().quantity, 0.0)
+            assertEquals(50.0, pantry.items.single().quantity, 0.0)
         }
     }
 
     @Test
     fun commentsPersistAcrossReadsAndCanBeDeletedByAuthor() = runTest {
         val container = MockAppContainer(seed)
-        val comment = container.comments.publish(recipe.recipeId, "Tasty", null)
-        assertEquals(listOf(comment), container.comments.findByRecipe(recipe.recipeId))
-        container.comments.delete(comment.commentId)
-        assertTrue(container.comments.findByRecipe(recipe.recipeId).isEmpty())
+        val comment = container.accounts.publishComment(recipe.recipeId, " Tasty ", null)
+        assertEquals("Tasty", comment.text)
+        assertEquals(seed.user.displayName, comment.authorName)
+        assertEquals(listOf(comment), container.accounts.loadComments(recipe.recipeId))
+        try {
+            container.accounts.likeComment(comment)
+            fail("Authors cannot like their own comment")
+        } catch (_: IllegalArgumentException) {
+            assertEquals(0, container.accounts.loadComments(recipe.recipeId).single().likeCount())
+        }
+        container.accounts.deleteComment(comment)
+        assertTrue(container.accounts.loadComments(recipe.recipeId).isEmpty())
     }
 
     @Test
     fun likesOnAnotherAuthorsCommentRemainUnique() = runTest {
         val comment = Comment("other-comment", recipe.recipeId, "other-author", "Tasty")
         val container = MockAppContainer(seed.copy(comments = listOf(comment)))
-        container.comments.like(comment.commentId)
-        container.comments.like(comment.commentId)
-        assertEquals(1, container.comments.findByRecipe(recipe.recipeId).single().likeCount())
+        container.accounts.likeComment(comment)
+        container.accounts.likeComment(comment)
+        assertEquals(1, container.accounts.loadComments(recipe.recipeId).single().likeCount())
+    }
+
+    @Test
+    fun deletingAccountRemovesItsLikesOnOtherAuthorsComments() = runTest {
+        val comment = Comment("other-comment", recipe.recipeId, "other-author", "Tasty")
+        val container = MockAppContainer(seed.copy(comments = listOf(comment)))
+        container.accounts.likeComment(comment)
+        container.accounts.deleteUser()
+        container.accounts.register("cook@example.com", "password")
+        assertEquals(0, container.accounts.loadComments(recipe.recipeId).single().likeCount())
+    }
+
+    @Test
+    fun anotherAuthorsCommentCannotBeDeleted() = runTest {
+        val comment = Comment("other-comment", recipe.recipeId, "other-author", "Tasty")
+        val container = MockAppContainer(seed.copy(comments = listOf(comment)))
+        try {
+            container.accounts.deleteComment(comment)
+            fail("Only the author can delete a comment")
+        } catch (_: IllegalArgumentException) {
+            assertEquals(listOf(comment), container.accounts.loadComments(recipe.recipeId))
+        }
     }
 
     @Test

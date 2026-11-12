@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,7 +30,7 @@ import com.example.macronomocon.ui.components.ScreenHeading
 import com.example.macronomocon.ui.components.StateFeedback
 import com.example.macronomocon.ui.recipe.RecipeState
 
-enum class RecipeFilter { ALL, SAVED, QUICK }
+enum class RecipeFilter { ALL, SAVED }
 
 @Composable
 fun RecipesScreen(
@@ -46,7 +48,6 @@ fun RecipesScreen(
         when (filter) {
             RecipeFilter.ALL -> true
             RecipeFilter.SAVED -> recipe.recipeId in favorites
-            RecipeFilter.QUICK -> recipe.isQuick()
         }
     }
     LazyColumn(
@@ -73,20 +74,24 @@ fun RecipesScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RecipeFilter.entries.forEach { option ->
-                    FilterChip(selected = filter == option, onClick = {
-                        onFilter(option)
-                    }, label = {
-                        Text(
-                            when (option) {
-                                RecipeFilter.ALL -> stringResource(R.string.for_you)
-                                RecipeFilter.SAVED -> stringResource(R.string.saved_recipes)
-                                RecipeFilter.QUICK -> stringResource(
-                                    R.string.quick_recipes,
-                                    Recipe.QUICK_MAX_MINUTES
-                                )
-                            }
-                        )
-                    })
+                    FilterChip(
+                        selected = filter == option,
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = filter == option,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary,
+                            selectedBorderWidth = 2.dp
+                        ),
+                        onClick = { onFilter(option) },
+                        label = {
+                            Text(
+                                when (option) {
+                                    RecipeFilter.ALL -> stringResource(R.string.for_you)
+                                    RecipeFilter.SAVED -> stringResource(R.string.saved_recipes)
+                                }
+                            )
+                        }
+                    )
                 }
             }
         }
