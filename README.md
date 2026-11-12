@@ -25,7 +25,9 @@ shelf life, and demo IDs are `const val`s in companion objects on the class they
 `MacronomoconApplication` owns one `AppContainer`. The current binding is
 `AuthAppContainer(context)`: Supabase accounts and recipe bookmarks, Spoonacular recipes and
 ingredients through the `spoonacular` Edge Function, Google's code scanner, and in-memory
-pantry/comments (`data/local`). `MockAppContainer` remains for previews and UI tests only.
+pantry (`data/local`). Comments and likes use `SupabaseCommentRepository`; apply
+`supabase/migrations/20261112010000_recipe_comments.sql` before running this version.
+`MockAppContainer` remains for previews and UI tests only.
 Add `SUPABASE_PUBLISHABLE_KEY` to ignored `local.properties`
 to enable email and Google sign-in (see `supabase/README.md` for the Google provider setup).
 `AppContainer.viewModelFactory()` injects
@@ -94,7 +96,7 @@ hash: password verification, OTP challenges, lockouts, and authorization belong 
 the authentication service. Server repository implementations must derive identity
 from the session, enforce ownership/unique likes, and make inventory writes atomic.
 
-Remaining integration work: pantry and comment backend transports, Open Food Facts
+Remaining integration work: pantry backend transport, comment photo upload/display, Open Food Facts
 barcode lookup, and password recovery/MFA/account deletion flows.
 The singleton connection pool, connection factory, and MySQL connections belong in
 a separate backend module; this Android-only project does not connect directly to MySQL.

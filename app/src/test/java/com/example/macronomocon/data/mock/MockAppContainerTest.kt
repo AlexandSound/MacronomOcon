@@ -1,5 +1,6 @@
 package com.example.macronomocon.data.mock
 
+import com.example.macronomocon.domain.model.Comment
 import com.example.macronomocon.domain.model.Difficulty
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.MealType
@@ -52,14 +53,21 @@ class MockAppContainerTest {
     }
 
     @Test
-    fun commentsPersistAcrossReadsAndLikesRemainUnique() = runTest {
+    fun commentsPersistAcrossReadsAndCanBeDeletedByAuthor() = runTest {
         val container = MockAppContainer(seed)
         val comment = container.comments.publish(recipe.recipeId, "Tasty", null)
+        assertEquals(listOf(comment), container.comments.findByRecipe(recipe.recipeId))
+        container.comments.delete(comment.commentId)
+        assertTrue(container.comments.findByRecipe(recipe.recipeId).isEmpty())
+    }
+
+    @Test
+    fun likesOnAnotherAuthorsCommentRemainUnique() = runTest {
+        val comment = Comment("other-comment", recipe.recipeId, "other-author", "Tasty")
+        val container = MockAppContainer(seed.copy(comments = listOf(comment)))
         container.comments.like(comment.commentId)
         container.comments.like(comment.commentId)
         assertEquals(1, container.comments.findByRecipe(recipe.recipeId).single().likeCount())
-        container.comments.delete(comment.commentId)
-        assertTrue(container.comments.findByRecipe(recipe.recipeId).isEmpty())
     }
 
     @Test
