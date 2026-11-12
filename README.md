@@ -24,8 +24,11 @@ shelf life, and demo IDs are `const val`s in companion objects on the class they
 
 `MacronomoconApplication` owns one `AppContainer`. The current binding is
 `AuthAppContainer(context)`: Supabase accounts and recipe bookmarks, Spoonacular recipes and
-ingredients through the `spoonacular` Edge Function, Google's code scanner, and in-memory
-pantry/comments owned by `User`. `MockAppContainer` remains for previews and UI tests only.
+ingredients through the `spoonacular` Edge Function, Google's code scanner, the pantry owned
+by `User`, and shared recipe comments and likes. `SupabaseAccountRepository` persists the
+pantry to `pantry_items` and comments to `comments`/`comment_likes`; apply
+`supabase/migrations/20261112010000_recipe_comments.sql` before running this version.
+`MockAppContainer` remains for previews and UI tests only.
 Add `SUPABASE_PUBLISHABLE_KEY` to ignored `local.properties`
 to enable email and Google sign-in (see `supabase/README.md` for the Google provider setup).
 `AppContainer.viewModelFactory()` injects
@@ -34,10 +37,11 @@ with `collectAsStateWithLifecycle`. Replace the container binding with productio
 repository implementations when the backend is ready; screens do not access mocks.
 This uses explicit constructor injection, with no service locator inside child views.
 
-The mock container supplies seeded in-memory account data. `AccountViewModel` owns the active user; `User` holds pantry and comment state. Adding/removing
-stock, recording meals, saving recipes, changing preferences, and posting/liking/deleting
-comments update that session across screens. Independent containers remain isolated
-for tests (their constructor is `internal` and `@VisibleForTesting`). Restarting the app
+The mock container supplies seeded in-memory account data, including a comment by another
+demo author so likes can be tried. `AccountViewModel` owns the active user; `User` holds pantry
+and loaded comment state. Adding/removing stock, recording meals, saving recipes, changing
+preferences, and posting/liking/deleting comments update that session across screens.
+Independent containers remain isolated for tests (their constructor is `internal` and `@VisibleForTesting`). Restarting the app
 process resets its data. Mock authentication and share URLs are fixtures, not production
 services; the app itself uses `AuthAppContainer`.
 
@@ -95,20 +99,29 @@ from the session, enforce ownership/unique likes, and make inventory writes atom
 
 `AccountViewModel` delegates comment publishing, deletion, and liking to immutable
 `User` methods; `PantryViewModel` modifies that user's `Pantry` directly. There are no
-pantry/comment repositories or comment ViewModel. Profile refresh preserves session-local
-state for the same user; sign-out or switching users clears it.
+pantry/comment repositories or comment ViewModel: `AccountRepository` persists both,
+because they belong to the `User`. Opening a recipe loads every user's comments into the
+signed-in `User` (`showComments`); published and liked comments are the rows the server
+returns, so IDs, author display names, timestamps, and other readers' likes come from
+Supabase. Authors cannot like their own comments (`Comment.like` rejects it, the UI disables
+the button, and RLS refuses it), and only authors can delete. Profile refresh preserves the
+loaded pantry and comments for the same user; sign-out or switching users clears them.
 
 The database pattern uses abstract `DatabaseConnection` and `DatabaseQuery` types.
 `SupabaseConnectionFactory.createConnection()` builds a configured Supabase client;
 both the factory and connection expose `createQuery`. `SupabaseQuery` executes
-PostgREST `select` and `upsert` operations for profiles and recipe bookmarks using
-the authenticated client and existing RLS policies. There is no singleton connection
-pool, raw SQL connection, or MySQL implementation. The ingredient API factory creates
-`SpoonacularApiClient`; mock containers inject `MockIngredientApiFactory`.
+PostgREST `select` (with embedded columns and ordering), `insert`, `upsert`, and `delete`
+operations for profiles, pantry items, recipe bookmarks, comments, and likes using the
+authenticated client and RLS policies. Inserts and deletes return the affected rows, so a
+delete that RLS silently filtered out fails instead of appearing successful. `CommentMapper`
+converts comment rows. There is no singleton connection pool, raw SQL connection, or MySQL
+implementation. The ingredient API factory creates `SpoonacularApiClient`; mock containers
+inject `MockIngredientApiFactory`.
 
-Remaining integration work: pantry/comment persistence and shared discussions,
-custom-recipe storage/share links, and password recovery/MFA/account deletion flows.
-No server tables or migrations were added by this class-diagram refactor.
+Remaining integration work: atomic server-side meal deductions, comment photo upload/display,
+realtime comment updates, custom-recipe storage/share links, Open Food Facts barcode lookup,
+and password recovery/MFA/account deletion flows. The class-diagram refactor added no
+migrations; shared comments add `20261112010000_recipe_comments.sql` (see `supabase/README.md`).
 
 The editable [class diagram](https://lucid.app/lucidchart/c4c0211b-46c2-4277-98d2-d5c3e7943494/edit?page=0_0)
 shows the production core; Compose screens are grouped function boxes, with framework,

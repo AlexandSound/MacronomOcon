@@ -201,7 +201,7 @@ private fun CommentRow(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            stringResource(
+            comment.authorName.takeIf { it.isNotBlank() } ?: stringResource(
                 if (comment.authorId ==
                     user?.userId
                 ) {
@@ -217,9 +217,21 @@ private fun CommentRow(
             TextButton(
                 onClick = { onLike(comment) },
                 enabled =
-                enabled && user != null && user.userId !in comment.likedByUserIds
+                enabled &&
+                    user != null &&
+                    !comment.isAuthor(user) &&
+                    user.userId !in comment.likedByUserIds
             ) {
-                Text(stringResource(R.string.like_count, comment.likeCount()))
+                Text(
+                    stringResource(
+                        if (user?.userId in comment.likedByUserIds) {
+                            R.string.liked_count
+                        } else {
+                            R.string.like_count
+                        },
+                        comment.likeCount()
+                    )
+                )
             }
             if (comment.authorId ==
                 user?.userId

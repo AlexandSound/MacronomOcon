@@ -3,6 +3,7 @@ package com.example.macronomocon.data.supabase
 import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.domain.model.AccountException
 import com.example.macronomocon.domain.model.AuthenticationResult
+import com.example.macronomocon.domain.model.Comment
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
@@ -32,6 +33,11 @@ import kotlinx.serialization.json.put
 class SupabaseAccountRepository(private val connection: SupabaseConnection) : AccountRepository {
     companion object {
         const val PANTRY_TABLE = "pantry_items"
+        const val COMMENTS_TABLE = "comments"
+        const val COMMENT_LIKES_TABLE = "comment_likes"
+
+        /** Each comment row embeds the IDs of the users who liked it. */
+        const val COMMENT_COLUMNS = "*,comment_likes(user_id)"
     }
 
     private val client get() = connection.client
@@ -157,6 +163,57 @@ class SupabaseAccountRepository(private val connection: SupabaseConnection) : Ac
     override suspend fun deletePantryItem(item: PantryItem) {
         connection.createQuery(PANTRY_TABLE).delete(mapOf("pantry_item_id" to item.pantryItemId))
     }
+
+    // Shared comments: every signed-in user reads them; RLS limits writes to the author.
+    override suspend fun loadComments(recipeId: String): List<Comment> {
+        require(recipeId.isNotBlank())
+        return connection.createQuery(COMMENTS_TABLE).select(
+            mapOf("recipe_id" to recipeId),
+            COMMENT_COLUMNS,
+            orderBy = listOf("created_at", "comment_id")
+        ).map(CommentMapper::comment)
+    }
+
+    override suspend fun publishComment(
+        recipeId: String,
+        text: String,
+        imageUrl: String?
+    ): Comment {
+        require(recipeId.isNotBlank())
+        val image = imageUrl?.trim()?.takeIf { it.isNotEmpty() }
+        require(text.isNotBlank() || image != null)
+        return connection.createQuery(COMMENTS_TABLE).insert(
+            buildJsonObject {
+                put("recipe_id", recipeId)
+                put("user_id", signedInUserId())
+                put("text", text.trim())
+                put("image_url", image)
+            }
+        ).let(CommentMapper::comment)
+    }
+
+    override suspend fun deleteComment(comment: Comment) {
+        // Requiring a returned row prevents a silently filtered RLS delete appearing successful.
+        val deleted = connection.createQuery(COMMENTS_TABLE).delete(
+            mapOf("comment_id" to comment.commentId, "user_id" to signedInUserId())
+        )
+        check(deleted.size == 1) { "Comment was not deleted" }
+    }
+
+    override suspend fun likeComment(comment: Comment): Comment {
+        connection.createQuery(COMMENT_LIKES_TABLE).insert(
+            buildJsonObject {
+                put("comment_id", comment.commentId)
+                put("user_id", signedInUserId())
+            }
+        )
+        return connection.createQuery(COMMENTS_TABLE).select(
+            mapOf("comment_id" to comment.commentId),
+            COMMENT_COLUMNS
+        ).single().let(CommentMapper::comment)
+    }
+
+    private fun signedInUserId(): String = requireNotNull(client.auth.currentUserOrNull()).id
 
     private fun JsonObject.text(key: String): String = getValue(key).jsonPrimitive.content
 

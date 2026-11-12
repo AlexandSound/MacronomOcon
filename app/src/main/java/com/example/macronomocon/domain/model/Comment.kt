@@ -9,14 +9,18 @@ data class Comment(
     val text: String,
     val imageUrl: String? = null,
     val timestamp: Instant = Instant.now(),
-    val likedByUserIds: Set<String> = emptySet()
+    val likedByUserIds: Set<String> = emptySet(),
+    val authorName: String = ""
 ) {
     init {
         require(commentId.isNotBlank() && recipeId.isNotBlank() && authorId.isNotBlank())
-        require(text.isNotBlank())
+        require(text.isNotBlank() || !imageUrl.isNullOrBlank())
     }
 
-    fun like(u: User): Comment = copy(likedByUserIds = likedByUserIds + u.userId)
+    fun like(u: User): Comment {
+        require(!isAuthor(u))
+        return copy(likedByUserIds = likedByUserIds + u.userId)
+    }
 
     fun likeCount(): Int = likedByUserIds.size
 

@@ -80,4 +80,76 @@ class SupabaseQueryTest {
             client.close()
         }
     }
+
+    @Test
+    fun commentQueryEmbedsLikesAndOrdersByTimestampThenId() = runTest {
+        val engine = MockEngine { request ->
+            assertEquals(HttpMethod.Get, request.method)
+            assertEquals("/rest/v1/comments", request.url.encodedPath)
+            assertEquals("eq.716429", request.url.parameters["recipe_id"])
+            assertEquals(
+                "*,comment_likes(user_id)",
+                request.url.parameters["select"]
+            )
+            assertEquals(
+                "created_at.asc.nullslast,comment_id.asc.nullslast",
+                request.url.parameters["order"]
+            )
+            respond(
+                """[{"comment_id":"c1","comment_likes":[{"user_id":"reader"}]}]""",
+                HttpStatusCode.OK,
+                headersOf("Content-Type", "application/json")
+            )
+        }
+        val client = createSupabaseClient("https://example.test", "test-key") {
+            httpEngine = engine
+            install(Postgrest)
+        }
+        try {
+            val rows = SupabaseConnection(client).createQuery("comments").select(
+                mapOf("recipe_id" to "716429"),
+                SupabaseAccountRepository.COMMENT_COLUMNS,
+                listOf("created_at", "comment_id")
+            )
+            assertEquals("c1", rows.single()["comment_id"]?.jsonPrimitive?.content)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun insertAndDeleteReturnTheAffectedRows() = runTest {
+        val engine = MockEngine { request ->
+            assertEquals("/rest/v1/comments", request.url.encodedPath)
+            assertTrue(request.headers["Prefer"].orEmpty().contains("return=representation"))
+            when (request.method) {
+                HttpMethod.Post -> respond(
+                    """[{"comment_id":"server-id","author_name":"Brady"}]""",
+                    HttpStatusCode.Created,
+                    headersOf("Content-Type", "application/json")
+                )
+                HttpMethod.Delete -> {
+                    assertEquals("eq.server-id", request.url.parameters["comment_id"])
+                    assertEquals("eq.user-1", request.url.parameters["user_id"])
+                    // RLS hides another author's row, so nothing is deleted or returned.
+                    respond("[]", HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
+                }
+                else -> error("Unexpected ${request.method}")
+            }
+        }
+        val client = createSupabaseClient("https://example.test", "test-key") {
+            httpEngine = engine
+            install(Postgrest)
+        }
+        try {
+            val query = SupabaseConnection(client).createQuery("comments")
+            val inserted = query.insert(buildJsonObject { put("text", "Tip") })
+            assertEquals("server-id", inserted["comment_id"]?.jsonPrimitive?.content)
+            val deleted = query.delete(mapOf("comment_id" to "server-id", "user_id" to "user-1"))
+            assertTrue(deleted.isEmpty())
+            assertEquals(2, engine.requestHistory.size)
+        } finally {
+            client.close()
+        }
+    }
 }

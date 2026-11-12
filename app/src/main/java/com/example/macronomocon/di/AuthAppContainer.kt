@@ -18,8 +18,9 @@ import io.github.jan.supabase.auth.handleDeeplinks
 
 /**
  * Production composition root: Supabase accounts and bookmarks, Spoonacular recipes and
- * ingredients through the `spoonacular` Edge Function, and Google's barcode scanner. Pantry and
- * comments belong to the signed-in User for the current session.
+ * ingredients through the `spoonacular` Edge Function, and Google's barcode scanner. The
+ * signed-in User's pantry and the shared recipe comments and likes are persisted through
+ * [SupabaseAccountRepository].
  */
 class AuthAppContainer(private val context: Context) : AppContainer {
     override val liveAuth = true

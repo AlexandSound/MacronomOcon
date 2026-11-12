@@ -90,7 +90,7 @@ class AccountViewModel(private val repository: AccountRepository) :
         updateData { it.copy(user = saved) }
     }
 
-    /** Refresh remote profile fields without dropping this session's pantry or comments. */
+    /** Refresh remote profile fields without dropping this session's pantry or loaded comments. */
     private fun mergeSession(remote: User?): User? {
         val current = data.user
         return if (remote != null && current?.userId == remote.userId) {
@@ -100,27 +100,38 @@ class AccountViewModel(private val repository: AccountRepository) :
         }
     }
 
+    /** Loads every user's comments on [recipeId] into the signed-in [User]. */
     fun loadComments(recipeId: String) = action(UiMessage.ERROR_LOAD_COMMENTS) {
         requireNotNull(data.user)
         require(recipeId.isNotBlank())
         updateData { it.copy(commentRecipeId = recipeId) }
+        val shared = repository.loadComments(recipeId)
+        updateData { state ->
+            state.copy(user = state.user?.showComments(recipeId, shared))
+        }
     }
 
     fun publishComment(text: String, imageUrl: String? = null) =
         action(UiMessage.ERROR_PUBLISH_THIS_COMMENT) {
             val recipeId = requireNotNull(data.commentRecipeId)
-            val updated = requireNotNull(data.user).publishComment(recipeId, text, imageUrl)
-            updateData { it.copy(user = updated) }
+            requireNotNull(data.user)
+            require(text.isNotBlank() || !imageUrl.isNullOrBlank())
+            val published = repository.publishComment(recipeId, text.trim(), imageUrl)
+            updateData { it.copy(user = requireNotNull(it.user).publishComment(published)) }
         }
 
     fun deleteComment(comment: Comment) = action(UiMessage.ERROR_DELETE_THIS_COMMENT) {
-        val updated = requireNotNull(data.user).deleteComment(comment.commentId)
-        updateData { it.copy(user = updated) }
+        // Validates authorship before the request; the server enforces it again.
+        requireNotNull(data.user).deleteComment(comment.commentId)
+        repository.deleteComment(comment)
+        updateData { it.copy(user = requireNotNull(it.user).deleteComment(comment.commentId)) }
     }
 
     fun likeComment(comment: Comment) = action(UiMessage.ERROR_LIKE_THIS_COMMENT) {
-        val updated = requireNotNull(data.user).likeComment(comment.commentId)
-        updateData { it.copy(user = updated) }
+        // Rejects self-likes before the request; the server enforces it again.
+        requireNotNull(data.user).likeComment(comment.commentId)
+        val liked = repository.likeComment(comment)
+        updateData { it.copy(user = requireNotNull(it.user).likeComment(liked)) }
     }
 
     fun deleteAccount() = action(UiMessage.ERROR_DELETE_YOUR_ACCOUNT) {

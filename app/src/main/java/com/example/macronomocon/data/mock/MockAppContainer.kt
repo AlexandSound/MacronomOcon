@@ -10,12 +10,14 @@ import com.example.macronomocon.data.repository.RecipeUserDataSource
 import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.di.AppContainer
 import com.example.macronomocon.domain.model.AuthenticationResult
+import com.example.macronomocon.domain.model.Comment
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
+import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -38,10 +40,12 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
     }
 
     private val lock = Mutex()
-    private fun initialUser() =
-        seed.user.copy(pantry = Pantry(seed.pantryItems), comments = seed.comments.toList())
+    private fun initialUser() = seed.user.copy(pantry = Pantry(seed.pantryItems))
     private var user: User? = initialUser()
     private val catalog = seed.recipes.associateBy { it.recipeId }.toMutableMap()
+
+    // Shared by every account in this container, like the server's comments table.
+    private val discussion = seed.comments.associateBy { it.commentId }.toMutableMap()
 
     override val accounts = object : AccountRepository {
         override suspend fun register(email: String, password: String) = lock.withLock {
@@ -63,6 +67,12 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
             requireNotNull(user).copy(preferences = preferences).also { user = it }
         }
         override suspend fun deleteUser() = lock.withLock {
+            val id = user?.userId
+            // Mirrors the server's on delete cascade for both comments and comment_likes.
+            discussion.values.removeAll { it.authorId == id }
+            discussion.replaceAll { _, c ->
+                c.copy(likedByUserIds = c.likedByUserIds - id.orEmpty())
+            }
             user = null
         }
 
@@ -72,6 +82,36 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
         }
         override suspend fun savePantryItem(item: PantryItem) = Unit
         override suspend fun deletePantryItem(item: PantryItem) = Unit
+
+        override suspend fun loadComments(recipeId: String): List<Comment> = lock.withLock {
+            discussion.values.filter { it.recipeId == recipeId }.sortedBy { it.timestamp }
+        }
+        override suspend fun publishComment(
+            recipeId: String,
+            text: String,
+            imageUrl: String?
+        ): Comment = lock.withLock {
+            require(catalog.containsKey(recipeId))
+            val author = requireNotNull(user)
+            Comment(
+                UUID.randomUUID().toString(),
+                recipeId,
+                author.userId,
+                text.trim(),
+                imageUrl?.trim()?.takeIf { it.isNotEmpty() },
+                authorName = author.displayName
+            ).also { discussion[it.commentId] = it }
+        }
+        override suspend fun deleteComment(comment: Comment) = lock.withLock {
+            val stored = requireNotNull(discussion[comment.commentId])
+            require(stored.isAuthor(requireNotNull(user)))
+            discussion.remove(comment.commentId)
+            Unit
+        }
+        override suspend fun likeComment(comment: Comment): Comment = lock.withLock {
+            requireNotNull(discussion[comment.commentId]).like(requireNotNull(user))
+                .also { discussion[it.commentId] = it }
+        }
     }
     override val ingredients = IngredientRepository(MockIngredientApiFactory(seed.ingredients))
     override val recipes = RecipeRepository(

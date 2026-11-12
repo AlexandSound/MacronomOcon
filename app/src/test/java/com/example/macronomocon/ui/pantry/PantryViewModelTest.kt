@@ -6,6 +6,7 @@ import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.data.repository.IngredientRepository
 import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.domain.model.AuthenticationResult
+import com.example.macronomocon.domain.model.Comment
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
@@ -58,6 +59,14 @@ class PantryViewModelTest {
         override suspend fun deletePantryItem(item: PantryItem) {
             deleted += item
         }
+        override suspend fun loadComments(recipeId: String): List<Comment> = emptyList()
+        override suspend fun publishComment(
+            recipeId: String,
+            text: String,
+            imageUrl: String?
+        ): Comment = error("Comments are not used by the pantry")
+        override suspend fun deleteComment(comment: Comment) = Unit
+        override suspend fun likeComment(comment: Comment) = comment
     }
     private val factory = object : IngredientApiFactory {
         override fun createClient(): IngredientApiClient = api
