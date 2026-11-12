@@ -66,7 +66,8 @@ internal fun EditProfileDialog(
         preferredCuisines = entries(cuisines),
         cookingMethods = entries(methods)
     )
-    val valid = displayName.isNotBlank() && displayName.length <= ProfileLimits.DISPLAY_NAME &&
+    val valid = displayName.isNotBlank() &&
+        displayName.length <= ProfileLimits.DISPLAY_NAME &&
         restrictions.length <= ProfileLimits.PREFERENCE_TEXT &&
         cuisines.length <= ProfileLimits.PREFERENCE_TEXT &&
         methods.length <= ProfileLimits.PREFERENCE_TEXT &&
