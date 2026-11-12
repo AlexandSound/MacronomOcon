@@ -3,22 +3,30 @@ package com.example.macronomocon.data.repository
 import com.example.macronomocon.data.api.RecipeApiClient
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.UserPreferences
 
 class RecipeRepository(
     private val api: RecipeApiClient,
     private val userData: RecipeUserDataSource
 ) {
-    suspend fun search(name: String): List<Recipe> =
-        if (name.isBlank()) emptyList() else visible(api.searchRecipes(name.trim()))
+    suspend fun search(
+        name: String,
+        preferences: UserPreferences = UserPreferences()
+    ): List<Recipe> =
+        if (name.isBlank()) emptyList() else visible(api.searchRecipes(name.trim(), preferences))
 
-    suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> = if (items.isEmpty()) {
+    suspend fun findByIngredients(
+        items: List<Ingredient>,
+        preferences: UserPreferences = UserPreferences()
+    ): List<Recipe> = if (items.isEmpty()) {
         emptyList()
     } else {
         visible(
             api.findByIngredients(
                 items.distinctBy {
                     it.ingredientId
-                }
+                },
+                preferences
             )
         )
     }

@@ -392,3 +392,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # asymmetric JWT signing keys), so the gateway's legacy JWT check is off.
 [functions.spoonacular]
 verify_jwt = false
+
+# JWT is verified against Auth inside the function before any admin operation.
+[functions.delete-account]
+verify_jwt = false

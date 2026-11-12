@@ -13,6 +13,7 @@ import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionSource
 import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
@@ -128,7 +129,28 @@ class SupabaseAccountRepository(private val client: SupabaseClient) : AccountRep
         else -> null
     }?.let(::AccountException)
 
-    // These features require dedicated MFA/admin flows and are not exposed in this UI.
+    override suspend fun updateEmail(email: String): String {
+        try {
+            return client.auth.updateUser { this.email = email.trim() }.email.orEmpty()
+        } catch (e: AuthRestException) {
+            throw e.toAccountException() ?: e
+        }
+    }
+
+    override suspend fun updatePassword(password: String) {
+        try {
+            client.auth.updateUser { this.password = password }
+        } catch (e: AuthRestException) {
+            throw e.toAccountException() ?: e
+        }
+    }
+
+    override suspend fun deleteUser() {
+        client.functions.invoke("delete-account", buildJsonObject {})
+        // The auth user no longer exists. Clear persisted tokens without a second network call.
+        client.auth.clearSession()
+    }
+
+    // MFA enrollment and verification require a dedicated flow.
     override suspend fun verifyOtp(code: String): User = error("MFA is not configured")
-    override suspend fun deleteUser(): Unit = error("Account deletion requires a server endpoint")
 }

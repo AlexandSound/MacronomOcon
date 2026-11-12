@@ -64,6 +64,12 @@ class AuthAppContainer(private val context: Context) : AppContainer {
     override val accounts: AccountRepository by lazy {
         val remote = SupabaseAccountRepository(client)
         object : AccountRepository by remote {
+            override suspend fun deleteUser() {
+                remote.deleteUser()
+                localPantry.clear()
+                localComments.clear()
+            }
+
             override suspend fun signOut() {
                 try {
                     remote.signOut()

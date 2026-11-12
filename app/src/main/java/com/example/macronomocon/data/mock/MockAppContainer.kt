@@ -96,15 +96,20 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
     })
     override val recipes = RecipeRepository(
         object : RecipeApiClient {
-            override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> =
-                lock.withLock {
-                    val ids = items.map { it.ingredientId }.toSet()
-                    catalog.values.filter { r -> r.getIngredients().any { it.ingredientId in ids } }
-                        .sortedByDescending { r ->
-                            r.getIngredients().count { it.ingredientId in ids }
-                        }
-                }
-            override suspend fun searchRecipes(query: String): List<Recipe> = lock.withLock {
+            override suspend fun findByIngredients(
+                items: List<Ingredient>,
+                preferences: UserPreferences
+            ): List<Recipe> = lock.withLock {
+                val ids = items.map { it.ingredientId }.toSet()
+                catalog.values.filter { r -> r.getIngredients().any { it.ingredientId in ids } }
+                    .sortedByDescending { r ->
+                        r.getIngredients().count { it.ingredientId in ids }
+                    }
+            }
+            override suspend fun searchRecipes(
+                query: String,
+                preferences: UserPreferences
+            ): List<Recipe> = lock.withLock {
                 catalog.values.filter { it.name.contains(query, ignoreCase = true) }
             }
             override suspend fun getRecipe(recipeId: String): Recipe = lock.withLock {

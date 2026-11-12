@@ -4,6 +4,8 @@ import com.example.macronomocon.data.api.IngredientApiClient
 import com.example.macronomocon.data.api.RecipeApiClient
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.RecipePreferences
+import com.example.macronomocon.domain.model.UserPreferences
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.exceptions.NotFoundRestException
 import io.github.jan.supabase.functions.functions
@@ -28,15 +30,23 @@ class SpoonacularApiClient(private val client: SupabaseClient) :
         const val MAX_BULK_IDS = 20
     }
 
-    override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> =
+    override suspend fun findByIngredients(
+        items: List<Ingredient>,
+        preferences: UserPreferences
+    ): List<Recipe> = SpoonacularMapper.recipes(
+        call("findByIngredients") {
+            put("ingredients", JsonArray(items.map { JsonPrimitive(it.name) }))
+            putPreferences(preferences)
+        }
+    )
+
+    override suspend fun searchRecipes(query: String, preferences: UserPreferences): List<Recipe> =
         SpoonacularMapper.recipes(
-            call("findByIngredients") {
-                put("ingredients", JsonArray(items.map { JsonPrimitive(it.name) }))
+            call("search") {
+                put("query", query)
+                putPreferences(preferences)
             }
         )
-
-    override suspend fun searchRecipes(query: String): List<Recipe> =
-        SpoonacularMapper.recipes(call("search") { put("query", query) })
 
     override suspend fun getRecipe(recipeId: String): Recipe =
         SpoonacularMapper.recipe(call("recipe") { put("id", recipeId) })
@@ -62,6 +72,13 @@ class SpoonacularApiClient(private val client: SupabaseClient) :
             call("ingredients") { put("query", term) },
             barcode
         )
+    }
+
+    private fun JsonObjectBuilder.putPreferences(preferences: UserPreferences) {
+        val filters = RecipePreferences.from(preferences)
+        if (filters.diet.isNotEmpty()) put("diet", filters.diet)
+        if (filters.intolerances.isNotEmpty()) put("intolerances", filters.intolerances)
+        if (filters.cuisine.isNotEmpty()) put("cuisine", filters.cuisine)
     }
 
     private suspend fun call(action: String, params: JsonObjectBuilder.() -> Unit): JsonObject {

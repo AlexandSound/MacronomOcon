@@ -6,6 +6,7 @@ import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.MealType
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.RecipeIngredient
+import com.example.macronomocon.domain.model.UserPreferences
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
@@ -22,13 +23,24 @@ class RecipeRepositoryTest {
     private val blocked = allowed.copy(recipeId = "blocked")
     private var received = emptyList<Ingredient>()
     private var requestCount = 0
+    private var receivedPreferences = UserPreferences()
     private val api = object : RecipeApiClient {
-        override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> {
+        override suspend fun findByIngredients(
+            items: List<Ingredient>,
+            preferences: UserPreferences
+        ): List<Recipe> {
             requestCount++
             received = items
+            receivedPreferences = preferences
             return listOf(allowed, blocked, allowed)
         }
-        override suspend fun searchRecipes(query: String): List<Recipe> = listOf(allowed, blocked)
+        override suspend fun searchRecipes(
+            query: String,
+            preferences: UserPreferences
+        ): List<Recipe> {
+            receivedPreferences = preferences
+            return listOf(allowed, blocked)
+        }
         override suspend fun getRecipe(recipeId: String): Recipe = allowed
     }
     private val storage = object : RecipeUserDataSource {
@@ -45,6 +57,20 @@ class RecipeRepositoryTest {
         val repository = RecipeRepository(api, storage)
         assertEquals(listOf(allowed), repository.findByIngredients(listOf(rice, rice)))
         assertEquals(listOf(rice), received)
+    }
+
+    @Test
+    fun preferencesReachBothRecommendationAndSearchTransports() = runTest {
+        val repository = RecipeRepository(api, storage)
+        val preferences = UserPreferences(
+            dietaryRestrictions = listOf("vegan"),
+            preferredCuisines = listOf("italian")
+        )
+        repository.findByIngredients(listOf(rice), preferences)
+        assertEquals(preferences, receivedPreferences)
+        receivedPreferences = UserPreferences()
+        repository.search("rice", preferences)
+        assertEquals(preferences, receivedPreferences)
     }
 
     @Test
