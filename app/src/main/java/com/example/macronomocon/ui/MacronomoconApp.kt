@@ -53,6 +53,7 @@ import com.example.macronomocon.R
 import com.example.macronomocon.di.AppContainer
 import com.example.macronomocon.di.viewModelFactory
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.account.AccountViewModel
 import com.example.macronomocon.ui.account.CommentState
 import com.example.macronomocon.ui.common.ViewState
@@ -130,6 +131,7 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
     )
     var destination by rememberSaveable { mutableStateOf(Destination.KITCHEN) }
     var filter by rememberSaveable { mutableStateOf(RecipeFilter.ALL) }
+    var recipeQuery by rememberSaveable { mutableStateOf("") }
     // Keep the selected recipe ID across recreation.
     var detailKey by rememberSaveable { mutableStateOf<String?>(null) }
     var showAdd by rememberSaveable { mutableStateOf(false) }
@@ -140,11 +142,16 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
     fun recommendations() {
         val ingredients = pantry.uiState.value.data.items
             .filter { !it.isExpired() && it.quantity > 0 }.map { it.ingredient }
-        kitchenRecipes.findRecipes(ingredients)
+        val preferences = account.uiState.value.data.user?.preferences ?: UserPreferences()
+        kitchenRecipes.findRecipes(ingredients, preferences)
         if (filter == RecipeFilter.SAVED) {
             recipes.loadSaved(account.uiState.value.data.user?.favoriteRecipeIds.orEmpty())
         } else {
-            recipes.findRecipes(ingredients)
+            if (recipeQuery.isBlank()) {
+                recipes.findRecipes(ingredients, preferences)
+            } else {
+                recipes.search(recipeQuery, preferences)
+            }
         }
     }
     fun navigate(next: Destination) {
@@ -155,7 +162,7 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
         detailKey = recipe.recipeId
     }
 
-    LaunchedEffect(container) {
+    LaunchedEffect(container, accountState.data.user?.preferences) {
         pantry.loadPantry().join()
         recommendations()
     }
@@ -263,7 +270,8 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
                                         }
                                     },
                                     {
-                                        if (it.isBlank()) recommendations() else recipes.search(it)
+                                        recipeQuery = it
+                                        recommendations()
                                     },
                                     ::openRecipe,
                                     recipes::clearError
@@ -286,7 +294,34 @@ private fun SignedInApp(container: AppContainer, account: AccountViewModel) {
                                     },
                                     account::clearError,
                                     liveAuth = container.liveAuth,
-                                    onLogout = account::logOut
+                                    onLogout = account::logOut,
+                                    onDeleteAccount = account::deleteAccount,
+                                    onUpdateAccount = { draft ->
+                                        val current = account.uiState.value.data.user
+                                        if (current == null) {
+                                            false
+                                        } else {
+                                            account.updateAccount(
+                                                current.copy(
+                                                    displayName = draft.displayName,
+                                                    preferences = draft.preferences.copy(
+                                                        notificationsEnabled =
+                                                        current.preferences.notificationsEnabled
+                                                    )
+                                                )
+                                            ).join()
+                                            account.uiState.value.errorMessage == null
+                                        }
+                                    },
+                                    onChangeEmail = {
+                                        account.changeEmail(it).join()
+                                        account.uiState.value.errorMessage == null
+                                    },
+                                    onChangePassword = {
+                                        account.changePassword(it).join()
+                                        account.uiState.value.errorMessage == null
+                                    },
+                                    onDismissNotice = account::clearNotice
                                 )
                             }
                         }

@@ -79,7 +79,7 @@ Validation:
 ## Spoonacular Edge Function
 
 `functions/spoonacular/index.ts` is the only place the Spoonacular key is used. It requires a
-signed-in user's access token, forwards six allowlisted actions (`search`,
+signed-in user's access token and uses `routes.ts` (unit-tested by `routes_test.ts`) to forward six allowlisted actions (`search`,
 `findByIngredients`, `recipe`, `recipes` (bulk, up to 20 IDs), `ingredients`, `upc`) with
 bounded inputs and at most 10 results, and maps an exhausted daily quota (Spoonacular 402) to
 429. Responses are not stored server-side. The Android `SpoonacularApiClient` calls it through
@@ -158,8 +158,8 @@ No Android OAuth client or SHA-1 fingerprint is needed for this browser flow. Fo
 the local stack, export `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and
 `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` before `supabase start`.
 
-This version does not handle password recovery,
-MFA enrollment/challenges, or account deletion. Do not enable MFA for demo accounts
+This version does not handle password recovery or
+MFA enrollment/challenges. Do not enable MFA for demo accounts
 until a challenge screen is implemented. Hosted Auth settings were not changed.
 
 The Supabase SDK restores and refreshes sessions. Session preferences are excluded
@@ -170,3 +170,72 @@ The default mock container remains available to previews and existing UI tests.
 
 Validation should include confirmation-required registration, invalid credentials,
 app restart after sign-in, sign-out, and separate users updating their own profiles.
+
+
+## Account deletion and profile editing
+
+Deploy both functions from this repository before testing the new Profile controls:
+
+```sh
+supabase login
+supabase link --project-ref vakuttlbmvqqtklapovu
+supabase functions deploy delete-account --no-verify-jwt
+supabase functions deploy spoonacular --no-verify-jwt
+```
+
+These cards add no database migration, but the shared comments migration
+(`20261112010000_recipe_comments.sql`, above) must already be applied. The hosted Edge runtime supplies
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The admin key is
+read only by `delete-account`; never put it in Android configuration or commit a key.
+The existing `SPOONACULAR_API_KEY` secret is still needed by `spoonacular`.
+
+`delete-account` only accepts POST with a Bearer JWT, validates it with Auth's
+`getUser`, and deletes that verified user's ID with a separate admin client. A user ID
+in request JSON or the URL is never used. Auth deletion cascades (`on delete cascade`) to
+`profiles`, `pantry_items`, `recipe_bookmarks`, `custom_recipes`, `comments`, and
+`comment_likes`; likes on the deleted user's comments cascade with those comments.
+On failure the app keeps the account and shows an error. After success, the SDK's
+persisted local session is cleared (no second network sign-out is required after
+removing the user), and `AccountViewModel` resets its state, dropping the session's
+pantry and loaded comments. There is no local pantry/comment store to clear.
+
+Edit profile saves display name, diets/intolerances, cuisines and cooking methods.
+The current expiry reminder setting and recipe bookmarks are preserved. Preference
+fields use comma-separated values and show supported diets/cuisines. Cooking methods
+are saved for later use; they do not filter recommendations in this implementation.
+Diets are combined with comma/AND, intolerances exclude every selected allergen, and
+cuisines are comma-separated alternatives. The client passes these filters to both
+search and pantry recommendations; the Edge Function validates and forwards only the
+allowlisted parameters to complexSearch. Cache keys include the normalized filters.
+Changing preferences refreshes recommendations and does not reuse old filter results.
+Saved recipe browsing remains a view of the user's saved items.
+
+Email and password changes call Supabase Auth `updateUser`, not profile-table writes.
+The email confirmation policy is controlled by the hosted project: test both old/new
+inboxes if secure email change is enabled. The app shows a request notice, not an
+unconditional claim that an email is already changed. Password fields are transient
+and cleared on submission. If the hosted project requires recent authentication,
+sign in again before retrying. Password recovery/MFA challenge UI is outside these cards.
+
+### Validation for these cards
+
+Local function tests (no real account deletion or Spoonacular requests):
+
+```sh
+deno test supabase/functions/delete-account/handler_test.ts supabase/functions/spoonacular/routes_test.ts
+deno check supabase/functions/delete-account/index.ts supabase/functions/spoonacular/index.ts
+```
+
+Android checks with the configured SDK/JDK:
+
+```sh
+./gradlew ktlintCheck :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+./gradlew :app:connectedDebugAndroidTest
+```
+
+Use disposable accounts for the live test: cancel deletion and check nothing changes;
+then confirm deletion and check Auth Users plus all six user tables for that user's ID.
+A second account's rows must remain. Verify failed/expired JWT requests return 401,
+profile/preferences survive app restart, changing diets/cuisines changes outgoing recipe
+filters, password changes permit signing in with the new password, and email changes
+follow the project's confirmation policy.

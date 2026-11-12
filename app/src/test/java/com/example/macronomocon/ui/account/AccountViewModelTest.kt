@@ -116,6 +116,67 @@ class AccountViewModelTest {
     }
 
     @Test
+    fun successfulDeletionClearsAccountButFailedDeletionKeepsIt() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        repository.fail = true
+        vm.deleteAccount().join()
+        assertEquals("id", vm.uiState.value.data.user?.userId)
+        assertEquals(UiMessage.ERROR_DELETE_YOUR_ACCOUNT, vm.uiState.value.errorMessage)
+        repository.fail = false
+        vm.deleteAccount().join()
+        assertNull(vm.uiState.value.data.user)
+    }
+
+    @Test
+    fun emailChangeDoesNotPretendConfirmationAlreadyHappened() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("old@example.com", "password123").join()
+        vm.changeEmail(" new@example.com ").join()
+        assertEquals("new@example.com", repository.email)
+        assertEquals("old@example.com", vm.uiState.value.data.user?.email)
+        assertEquals(UiMessage.EMAIL_CHANGE_REQUESTED, vm.uiState.value.data.notice)
+    }
+
+    @Test
+    fun failedPasswordChangeShowsErrorAndNoSuccessNotice() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("old@example.com", "password123").join()
+        repository.fail = true
+        vm.changePassword("new-password").join()
+        assertEquals(UiMessage.ERROR_UPDATE_PASSWORD, vm.uiState.value.errorMessage)
+        assertNull(vm.uiState.value.data.notice)
+    }
+
+    @Test
+    fun profileSaveKeepsPreferencesAndRejectsUnsupportedRestrictions() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        val user = requireNotNull(vm.uiState.value.data.user)
+        vm.updateAccount(
+            user.copy(
+                displayName = "Thomas",
+                preferences = UserPreferences(
+                    dietaryRestrictions = listOf("vegan"),
+                    preferredCuisines = listOf("italian"),
+                    cookingMethods = listOf("grilling")
+                )
+            )
+        ).join()
+        assertEquals("Thomas", vm.uiState.value.data.user?.displayName)
+        assertEquals(listOf("grilling"), repository.current?.preferences?.cookingMethods)
+        vm.updateAccount(
+            user.copy(
+                preferences = UserPreferences(
+                    dietaryRestrictions = listOf("unsupported")
+                )
+            )
+        ).join()
+        assertEquals(UiMessage.ERROR_UPDATE_YOUR_ACCOUNT, vm.uiState.value.errorMessage)
+        assertEquals(listOf("vegan"), repository.current?.preferences?.dietaryRestrictions)
+    }
+
+    @Test
     fun profileRefreshPreservesCommentsAndPantryForSameAccount() = runTest(dispatcher) {
         val vm = AccountViewModel(repository)
         vm.logIn("student@example.com", "password123").join()
@@ -175,6 +236,20 @@ class AccountViewModelTest {
         assertTrue(pantry !== requireNotNull(vm.user).pantry)
     }
 
+    @Test
+    fun deletionAndSignOutClearLoadedCommentsAndSession() = runTest(dispatcher) {
+        val vm = AccountViewModel(repository)
+        vm.logIn("student@example.com", "password123").join()
+        vm.loadComments("recipe").join()
+        vm.publishComment("Before deletion").join()
+        vm.deleteAccount().join()
+        assertEquals(AccountState(), vm.uiState.value.data)
+        vm.logIn("student@example.com", "password123").join()
+        vm.loadComments("recipe").join()
+        vm.logOut().join()
+        assertEquals(AccountState(), vm.uiState.value.data)
+    }
+
     private class FakeAccounts : AccountRepository {
         override val signedOutEvents = MutableSharedFlow<Unit>()
         override val signedInEvents = MutableSharedFlow<Unit>()
@@ -206,7 +281,16 @@ class AccountViewModelTest {
         override suspend fun saveUser(user: User) = user.also { current = it }
         override suspend fun savePreferences(preferences: UserPreferences) =
             saveUser(requireNotNull(current).copy(preferences = preferences))
+        override suspend fun updateEmail(email: String): String {
+            check(!fail)
+            this.email = email
+            return requireNotNull(current).email
+        }
+        override suspend fun updatePassword(password: String) {
+            check(!fail)
+        }
         override suspend fun deleteUser() {
+            check(!fail)
             current = null
         }
         override suspend fun loadPantryItems(): List<PantryItem> = emptyList()

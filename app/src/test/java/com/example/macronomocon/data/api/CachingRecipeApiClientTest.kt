@@ -4,6 +4,7 @@ import com.example.macronomocon.domain.model.Difficulty
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.MealType
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.UserPreferences
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -24,12 +25,18 @@ class CachingRecipeApiClientTest {
         var single = 0
         val bulk = mutableListOf<List<String>>()
 
-        override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> {
+        override suspend fun findByIngredients(
+            items: List<Ingredient>,
+            preferences: UserPreferences
+        ): List<Recipe> {
             searches++
             delay(100)
             return recipes.values.toList()
         }
-        override suspend fun searchRecipes(query: String): List<Recipe> {
+        override suspend fun searchRecipes(
+            query: String,
+            preferences: UserPreferences
+        ): List<Recipe> {
             searches++
             return recipes.values.toList()
         }
@@ -46,6 +53,39 @@ class CachingRecipeApiClientTest {
     private val api = CountingApi(listOf("10", "20", "30").associateWith(::recipe))
     private var clock = 0L
     private val cache = CachingRecipeApiClient(api, ttlMillis = 1_000) { clock }
+
+    @Test
+    fun differentPreferencesNeverShareSearchResults() = runTest {
+        val vegan = UserPreferences(dietaryRestrictions = listOf("vegan"))
+        val vegetarian = UserPreferences(dietaryRestrictions = listOf("vegetarian"))
+        cache.findByIngredients(listOf(rice), vegan)
+        cache.findByIngredients(listOf(rice), vegetarian)
+        cache.searchRecipes("pasta", vegan)
+        cache.searchRecipes("pasta", vegetarian)
+        assertEquals(4, api.searches)
+        cache.searchRecipes(" Pasta ", vegan)
+        assertEquals(4, api.searches)
+    }
+
+    @Test
+    fun equivalentPreferencesShareCacheDespiteOrderAndNotificationChanges() = runTest {
+        cache.searchRecipes(
+            "pasta",
+            UserPreferences(
+                dietaryRestrictions = listOf("vegan", "dairy-free"),
+                preferredCuisines = listOf("Italian", "Mexican")
+            )
+        )
+        cache.searchRecipes(
+            "pasta",
+            UserPreferences(
+                dietaryRestrictions = listOf("Dairy", "Vegan"),
+                preferredCuisines = listOf("mexican", "italian"),
+                notificationsEnabled = false
+            )
+        )
+        assertEquals(1, api.searches)
+    }
 
     @Test
     fun concurrentIdenticalSearchesShareOneCall() = runTest {

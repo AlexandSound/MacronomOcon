@@ -24,6 +24,10 @@ interface AccountRepository {
     suspend fun findUser(): User?
     suspend fun saveUser(user: User): User
     suspend fun savePreferences(preferences: UserPreferences): User
+
+    /** Returns the effective email; confirmation-required changes may retain the old address. */
+    suspend fun updateEmail(email: String): String = error("Email changes are not available")
+    suspend fun updatePassword(password: String): Unit = error("Password changes are not available")
     suspend fun deleteUser()
 
     /** The pantry is part of the User, so its items are persisted through this repository. */

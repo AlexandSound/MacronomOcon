@@ -5,6 +5,7 @@ import com.example.macronomocon.domain.model.Difficulty
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.MealType
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.common.StateViewModel
 import com.example.macronomocon.ui.common.UiMessage
 
@@ -18,13 +19,21 @@ class RecipeViewModel(private val repository: RecipeRepository) :
     StateViewModel<RecipeState>(RecipeState()) {
     private var allRecipes: List<Recipe> = emptyList()
 
-    fun search(name: String) = action(UiMessage.ERROR_SEARCH_RECIPES) {
-        allRecipes = repository.search(name)
-        updateData { it.copy(recipes = allRecipes) }
-    }
+    fun search(name: String, preferences: UserPreferences = UserPreferences()) =
+        action(UiMessage.ERROR_SEARCH_RECIPES) {
+            allRecipes = emptyList()
+            updateData { it.copy(recipes = emptyList()) }
+            allRecipes = repository.search(name, preferences)
+            updateData { it.copy(recipes = allRecipes) }
+        }
 
-    fun findRecipes(ingredients: List<Ingredient>) = action(UiMessage.ERROR_RETRIEVE_RECIPES) {
-        allRecipes = repository.findByIngredients(ingredients)
+    fun findRecipes(
+        ingredients: List<Ingredient>,
+        preferences: UserPreferences = UserPreferences()
+    ) = action(UiMessage.ERROR_RETRIEVE_RECIPES) {
+        allRecipes = emptyList()
+        updateData { it.copy(recipes = emptyList()) }
+        allRecipes = repository.findByIngredients(ingredients, preferences)
         updateData { it.copy(recipes = allRecipes) }
     }
 

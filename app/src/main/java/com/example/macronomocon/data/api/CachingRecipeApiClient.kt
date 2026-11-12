@@ -2,6 +2,8 @@ package com.example.macronomocon.data.api
 
 import com.example.macronomocon.domain.model.Ingredient
 import com.example.macronomocon.domain.model.Recipe
+import com.example.macronomocon.domain.model.RecipePreferences
+import com.example.macronomocon.domain.model.UserPreferences
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -25,19 +27,30 @@ class CachingRecipeApiClient(
     private class Entry<T>(val value: T, val storedAt: Long)
 
     private val lock = Mutex()
-    private val searches = lruMap<String, Entry<List<Recipe>>>(MAX_SEARCHES)
+    private data class SearchKey(val query: String, val preferences: RecipePreferences)
+
+    private val searches = lruMap<SearchKey, Entry<List<Recipe>>>(MAX_SEARCHES)
     private val recipes = lruMap<String, Entry<Recipe>>(MAX_RECIPES)
 
-    override suspend fun findByIngredients(items: List<Ingredient>): List<Recipe> {
+    override suspend fun findByIngredients(
+        items: List<Ingredient>,
+        preferences: UserPreferences
+    ): List<Recipe> {
         // Order-insensitive, so the same pantry always maps to the same entry.
         val names = items.map { it.name.trim().lowercase() }.distinct().sorted()
-        return search("ingredients:" + names.joinToString(",")) {
-            delegate.findByIngredients(items)
+        return search(
+            SearchKey("ingredients:" + names.joinToString(","), RecipePreferences.from(preferences))
+        ) {
+            delegate.findByIngredients(items, preferences)
         }
     }
 
-    override suspend fun searchRecipes(query: String): List<Recipe> =
-        search("query:" + query.trim().lowercase()) { delegate.searchRecipes(query) }
+    override suspend fun searchRecipes(query: String, preferences: UserPreferences): List<Recipe> =
+        search(
+            SearchKey("query:" + query.trim().lowercase(), RecipePreferences.from(preferences))
+        ) {
+            delegate.searchRecipes(query, preferences)
+        }
 
     override suspend fun getRecipe(recipeId: String): Recipe = lock.withLock {
         fresh(recipes[recipeId]) ?: delegate.getRecipe(recipeId).also { store(it) }
@@ -49,7 +62,7 @@ class CachingRecipeApiClient(
         recipeIds.mapNotNull { fresh(recipes[it]) }
     }
 
-    private suspend fun search(key: String, fetch: suspend () -> List<Recipe>): List<Recipe> =
+    private suspend fun search(key: SearchKey, fetch: suspend () -> List<Recipe>): List<Recipe> =
         lock.withLock {
             fresh(searches[key]) ?: fetch().also { results ->
                 searches[key] = Entry(results, now())

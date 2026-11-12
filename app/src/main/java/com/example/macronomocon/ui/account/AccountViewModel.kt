@@ -5,6 +5,7 @@ import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.domain.model.AccountException
 import com.example.macronomocon.domain.model.AuthenticationResult
 import com.example.macronomocon.domain.model.Comment
+import com.example.macronomocon.domain.model.RecipePreferences
 import com.example.macronomocon.domain.model.User
 import com.example.macronomocon.domain.model.UserPreferences
 import com.example.macronomocon.ui.common.StateViewModel
@@ -17,7 +18,8 @@ data class AccountState(
     val user: User? = null,
     val registrationSubmitted: Boolean = false,
     val requiresOtp: Boolean = false,
-    val commentRecipeId: String? = null
+    val commentRecipeId: String? = null,
+    val notice: UiMessage? = null
 )
 
 class AccountViewModel(private val repository: AccountRepository) :
@@ -81,6 +83,8 @@ class AccountViewModel(private val repository: AccountRepository) :
     }
 
     fun updateAccount(user: User) = action(UiMessage.ERROR_UPDATE_YOUR_ACCOUNT) {
+        require(user.displayName.isNotBlank())
+        RecipePreferences.from(user.preferences)
         val saved = mergeSession(repository.saveUser(user))
         updateData { it.copy(user = saved) }
     }
@@ -88,6 +92,36 @@ class AccountViewModel(private val repository: AccountRepository) :
     fun updatePreferences(preferences: UserPreferences) = action(UiMessage.ERROR_SAVE_PREFERENCES) {
         val saved = mergeSession(repository.savePreferences(preferences))
         updateData { it.copy(user = saved) }
+    }
+
+    fun clearNotice() = updateData { it.copy(notice = null) }
+
+    fun changeEmail(email: String) = action(
+        UiMessage.ERROR_UPDATE_EMAIL,
+        { (it as? AccountException)?.reason?.let(::registrationError) }
+    ) {
+        clearNotice()
+        val trimmed = email.trim()
+        require(trimmed.isNotBlank() && '@' in trimmed && trimmed.none { it.isWhitespace() })
+        val effectiveEmail = repository.updateEmail(trimmed)
+        updateData {
+            it.copy(
+                user = it.user?.let { user ->
+                    if (effectiveEmail.isBlank()) user else user.copy(email = effectiveEmail)
+                },
+                notice = UiMessage.EMAIL_CHANGE_REQUESTED
+            )
+        }
+    }
+
+    fun changePassword(password: String) = action(
+        UiMessage.ERROR_UPDATE_PASSWORD,
+        { (it as? AccountException)?.reason?.let(::registrationError) }
+    ) {
+        clearNotice()
+        require(password.isNotBlank())
+        repository.updatePassword(password)
+        updateData { it.copy(notice = UiMessage.PASSWORD_UPDATED) }
     }
 
     /** Refresh remote profile fields without dropping this session's pantry or loaded comments. */

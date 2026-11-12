@@ -118,9 +118,18 @@ converts comment rows. There is no singleton connection pool, raw SQL connection
 implementation. The ingredient API factory creates `SpoonacularApiClient`; mock containers
 inject `MockIngredientApiFactory`.
 
+The Profile tab edits the display name and recipe preferences (`ProfileDialogs`), changes
+email and password, logs out, and deletes the account after an explicit confirmation.
+Saved dietary restrictions and cuisines are validated by `RecipePreferences` and filter
+Spoonacular recommendations and searches; cooking methods are saved but not yet used as a
+filter. Account deletion
+calls the `delete-account` Edge Function, which deletes the verified caller's Auth user;
+profile, pantry, bookmark, comment, and like rows are removed by `on delete cascade`.
+Log out and deletion both reset `AccountState`, clearing the session's pantry and comments.
+
 Remaining integration work: atomic server-side meal deductions, comment photo upload/display,
 realtime comment updates, custom-recipe storage/share links, Open Food Facts barcode lookup,
-and password recovery/MFA/account deletion flows. The class-diagram refactor added no
+and password recovery/MFA flows. The class-diagram refactor added no
 migrations; shared comments add `20261112010000_recipe_comments.sql` (see `supabase/README.md`).
 
 The editable [class diagram](https://lucid.app/lucidchart/c4c0211b-46c2-4277-98d2-d5c3e7943494/edit?page=0_0)
