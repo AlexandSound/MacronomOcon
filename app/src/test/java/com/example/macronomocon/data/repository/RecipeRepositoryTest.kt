@@ -45,7 +45,7 @@ class RecipeRepositoryTest {
     }
     private val storage = object : RecipeUserDataSource {
         override suspend fun blockedRecipeIds(): Set<String> = setOf(blocked.recipeId)
-        override suspend fun setFavorite(recipeId: String, value: Boolean) = Unit
+        override suspend fun setFavorite(recipe: Recipe, value: Boolean) = Unit
         override suspend fun blockRecipe(recipeId: String) = Unit
         override suspend fun saveCustom(recipe: Recipe): Recipe = recipe
         override suspend fun createShareLink(recipeId: String): String =

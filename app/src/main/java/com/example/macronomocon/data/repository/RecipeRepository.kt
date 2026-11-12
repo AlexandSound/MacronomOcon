@@ -36,7 +36,7 @@ class RecipeRepository(
     suspend fun findByIds(recipeIds: Set<String>): List<Recipe> =
         if (recipeIds.isEmpty()) emptyList() else api.getRecipes(recipeIds.toList())
 
-    suspend fun setFavorite(r: Recipe, value: Boolean) = userData.setFavorite(r.recipeId, value)
+    suspend fun setFavorite(r: Recipe, value: Boolean) = userData.setFavorite(r, value)
 
     suspend fun blockRecipe(r: Recipe) = userData.blockRecipe(r.recipeId)
 

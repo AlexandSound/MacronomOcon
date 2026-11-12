@@ -13,8 +13,8 @@ lookup and manual search. Warm light/dark themes include hover and press feedbac
 | --- | --- |
 | MVVM | `ui/*/…ViewModel` expose read-only `StateFlow<ViewState<T>>`; Compose screens render it and send events back |
 | Repository Singleton | `MockAppContainer.getInstance` (double-checked, `@Volatile`) gives the process one container, so every screen shares one instance of each repository |
-| Factory | `AppContainer.viewModelFactory()` builds every ViewModel; `AppContainer.barcodeScanner()` creates scanners; `PantryItemFactory` turns raw form input into a valid `PantryItem` |
-| Adapter | `BarcodeScanner` is the target interface; `GoogleCodeScanner` adapts Google's code scanner task and `DemoBarcodeScanner` adapts a fixture code for previews and UI tests. `IngredientApiClient`/`RecipeApiClient` are the targets for future transport adapters |
+| Factory | `IngredientApiFactory` creates ingredient API clients; `SupabaseConnectionFactory` creates connections and queries; `AppContainer.viewModelFactory()` builds every ViewModel; `AppContainer.barcodeScanner()` creates scanners; `PantryItemFactory` turns raw form input into a valid `PantryItem` |
+| Adapter | `BarcodeScanner` is the target interface; `GoogleCodeScanner` adapts Google's code scanner task and `DemoBarcodeScanner` adapts a fixture code for previews and UI tests. `SpoonacularApiClient` implements the ingredient and recipe API contracts |
 | Dependency injection | Constructor injection from the composition root; no child view looks up a dependency |
 
 Fixed values such as units, the "use soon" window, the quick-recipe limit, the maximum
@@ -24,20 +24,24 @@ shelf life, and demo IDs are `const val`s in companion objects on the class they
 
 `MacronomoconApplication` owns one `AppContainer`. The current binding is
 `AuthAppContainer(context)`: Supabase accounts and recipe bookmarks, Spoonacular recipes and
-ingredients through the `spoonacular` Edge Function, Google's code scanner, and in-memory
-pantry/comments (`data/local`). `MockAppContainer` remains for previews and UI tests only.
+ingredients through the `spoonacular` Edge Function, Google's code scanner, the pantry owned
+by `User`, and shared recipe comments and likes. `SupabaseAccountRepository` persists the
+pantry to `pantry_items` and comments to `comments`/`comment_likes`; apply
+`supabase/migrations/20261112010000_recipe_comments.sql` before running this version.
+`MockAppContainer` remains for previews and UI tests only.
 Add `SUPABASE_PUBLISHABLE_KEY` to ignored `local.properties`
 to enable email and Google sign-in (see `supabase/README.md` for the Google provider setup).
 `AppContainer.viewModelFactory()` injects
-repositories into lifecycle-owned ViewModels. Compose collects their StateFlows
+repositories and a current-user provider into lifecycle-owned ViewModels. Compose collects their StateFlows
 with `collectAsStateWithLifecycle`. Replace the container binding with production
 repository implementations when the backend is ready; screens do not access mocks.
 This uses explicit constructor injection, with no service locator inside child views.
 
-The mock container shares one mutex-protected in-memory session. Adding/removing
-stock, recording meals, saving recipes, changing preferences, and posting/liking/deleting
-comments update that session across screens. Independent containers remain isolated
-for tests (their constructor is `internal` and `@VisibleForTesting`). Restarting the app
+The mock container supplies seeded in-memory account data, including a comment by another
+demo author so likes can be tried. `AccountViewModel` owns the active user; `User` holds pantry
+and loaded comment state. Adding/removing stock, recording meals, saving recipes, changing
+preferences, and posting/liking/deleting comments update that session across screens.
+Independent containers remain isolated for tests (their constructor is `internal` and `@VisibleForTesting`). Restarting the app
 process resets its data. Mock authentication and share URLs are fixtures, not production
 services; the app itself uses `AuthAppContainer`.
 
@@ -59,10 +63,10 @@ Images are Material Icons vector drawables only (`res/drawable/ic_*.xml`); recip
 | Package | Implemented responsibilities |
 | --- | --- |
 | `domain/model` | Ingredients, recipes, pantry stock/expiration/deduction, profiles, preferences, comments, and enums |
-| `data/repository` | Ingredient and recipe orchestration; authenticated account, pantry, comment, and recipe-storage contracts |
+| `data/repository` | Ingredient and recipe orchestration; authenticated account and recipe-storage contracts |
 | `data/api` | Ingredient lookup/search and recipe API contracts for transport implementations |
 | `data/scanner` | Google code scanner adapter for EAN/UPC barcodes |
-| `ui/account`, `ui/pantry`, `ui/recipe`, `ui/comment` | ViewModels with read-only StateFlow, serialized actions, loading/error state, and cancellation handling |
+| `ui/account`, `ui/pantry`, `ui/recipe` | ViewModels with read-only StateFlow, serialized actions, loading/error state, and cancellation handling |
 
 `PantryViewModel` receives a `BarcodeScanner` from the container, closes it when the
 ViewModel is cleared, and `scanBarcode()` passes the decoded string to the same lookup
@@ -72,8 +76,7 @@ does not modify the pantry until the user confirms a quantity, unit, and expirat
 `RecipeViewModel.findRecipes` sends selected ingredients through `RecipeRepository`.
 API interfaces deliberately have no fake production implementation or embedded keys.
 
-`RecipeIngredient` adds quantity and unit information that the diagram's ingredient
-association leaves implicit. Pantry deductions consume the earliest-expiring stock
+`RecipeIngredient` records each recipe requirement’s quantity and unit. Pantry deductions consume the earliest-expiring stock
 first, exclude expired stock, and leave all stock unchanged if a requirement cannot
 be met. Units are matched without guessing conversions. An expiration date is valid
 through that date. Domain dates accept an explicit date for deterministic tests.
@@ -94,10 +97,44 @@ hash: password verification, OTP challenges, lockouts, and authorization belong 
 the authentication service. Server repository implementations must derive identity
 from the session, enforce ownership/unique likes, and make inventory writes atomic.
 
-Remaining integration work: pantry and comment backend transports, Open Food Facts
-barcode lookup, and password recovery/MFA/account deletion flows.
-The singleton connection pool, connection factory, and MySQL connections belong in
-a separate backend module; this Android-only project does not connect directly to MySQL.
+`AccountViewModel` delegates comment publishing, deletion, and liking to immutable
+`User` methods; `PantryViewModel` modifies that user's `Pantry` directly. There are no
+pantry/comment repositories or comment ViewModel: `AccountRepository` persists both,
+because they belong to the `User`. Opening a recipe loads every user's comments into the
+signed-in `User` (`showComments`); published and liked comments are the rows the server
+returns, so IDs, author display names, timestamps, and other readers' likes come from
+Supabase. Authors cannot like their own comments (`Comment.like` rejects it, the UI disables
+the button, and RLS refuses it), and only authors can delete. Profile refresh preserves the
+loaded pantry and comments for the same user; sign-out or switching users clears them.
+
+The database pattern uses abstract `DatabaseConnection` and `DatabaseQuery` types.
+`SupabaseConnectionFactory.createConnection()` builds a configured Supabase client;
+both the factory and connection expose `createQuery`. `SupabaseQuery` executes
+PostgREST `select` (with embedded columns and ordering), `insert`, `upsert`, and `delete`
+operations for profiles, pantry items, recipe bookmarks, comments, and likes using the
+authenticated client and RLS policies. Inserts and deletes return the affected rows, so a
+delete that RLS silently filtered out fails instead of appearing successful. `CommentMapper`
+converts comment rows. There is no singleton connection pool, raw SQL connection, or MySQL
+implementation. The ingredient API factory creates `SpoonacularApiClient`; mock containers
+inject `MockIngredientApiFactory`.
+
+The Profile tab edits the display name and recipe preferences (`ProfileDialogs`), changes
+email and password, logs out, and deletes the account after an explicit confirmation.
+Saved dietary restrictions and cuisines are validated by `RecipePreferences` and filter
+Spoonacular recommendations and searches; cooking methods are saved but not yet used as a
+filter. Account deletion
+calls the `delete-account` Edge Function, which deletes the verified caller's Auth user;
+profile, pantry, bookmark, comment, and like rows are removed by `on delete cascade`.
+Log out and deletion both reset `AccountState`, clearing the session's pantry and comments.
+
+Remaining integration work: atomic server-side meal deductions, comment photo upload/display,
+realtime comment updates, custom-recipe storage/share links, Open Food Facts barcode lookup,
+and password recovery/MFA flows. The class-diagram refactor added no
+migrations; shared comments add `20261112010000_recipe_comments.sql` (see `supabase/README.md`).
+
+The editable [class diagram](https://lucid.app/lucidchart/c4c0211b-46c2-4277-98d2-d5c3e7943494/edit?page=0_0)
+shows the production core; Compose screens are grouped function boxes, with framework,
+state-holder, DI, caching, and test-only helpers summarized in its note.
 
 Run the implementation checks with:
 

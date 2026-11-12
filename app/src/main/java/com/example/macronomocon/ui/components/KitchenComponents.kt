@@ -33,10 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.example.macronomocon.R
 import com.example.macronomocon.domain.model.Difficulty
 import com.example.macronomocon.domain.model.MealType
@@ -60,13 +62,17 @@ fun WarmButton(
         if (hovered) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
         label = "buttonColor"
     )
+    val contentColor by animateColorAsState(
+        if (hovered) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
+        label = "buttonContentColor"
+    )
     val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "buttonScale")
     Button(
         onClick = onClick,
         enabled = enabled,
         interactionSource = interaction,
         shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color),
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = contentColor),
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 0.dp,
             hoveredElevation = 5.dp
@@ -84,7 +90,7 @@ fun ScreenHeading(title: String, subtitle: String) {
         Text(
             stringResource(R.string.brand_eyebrow),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(title, style = MaterialTheme.typography.headlineLarge)
         Text(
@@ -97,7 +103,13 @@ fun ScreenHeading(title: String, subtitle: String) {
 
 @Composable
 fun <T> StateFeedback(state: ViewState<T>, onDismiss: () -> Unit) {
-    if (state.isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    if (state.isLoading) {
+        LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.onSurface,
+            trackColor = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
     state.errorMessage?.let { message ->
         Surface(
             color = MaterialTheme.colorScheme.errorContainer,
@@ -130,17 +142,20 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
         onClick = onClick,
         interactionSource = interaction,
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (hovered) 6.dp else 0.dp),
         modifier = Modifier.fillMaxWidth().hoverable(interaction)
     ) {
-        RecipeSymbol(Modifier.fillMaxWidth().height(150.dp))
+        RecipeSymbol(recipe.imageUrl, Modifier.fillMaxWidth().height(150.dp))
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
                     stringResource(R.string.recipe_time, recipe.totalTime()),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     difficultyLabel(recipe.difficulty),
@@ -163,18 +178,19 @@ fun RecipeCard(recipe: Recipe, pantry: List<PantryItem>, onClick: () -> Unit) {
     }
 }
 
-/** Placeholder until recipe photos exist: a decorative Android/Material symbol, never generated art. */
+/** Recipe photo from [imageUrl], drawn over a decorative symbol shown while loading or without one. */
 @Composable
-fun RecipeSymbol(modifier: Modifier = Modifier) {
+fun RecipeSymbol(imageUrl: String?, modifier: Modifier = Modifier) {
     Box(
-        modifier.background(MaterialTheme.colorScheme.secondaryContainer),
+        modifier.background(MaterialTheme.colorScheme.outlineVariant),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            painterResource(R.drawable.ic_restaurant),
+        Icon(painterResource(R.drawable.ic_restaurant), null, Modifier.size(56.dp))
+        AsyncImage(
+            model = imageUrl,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.size(56.dp)
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize()
         )
     }
 }

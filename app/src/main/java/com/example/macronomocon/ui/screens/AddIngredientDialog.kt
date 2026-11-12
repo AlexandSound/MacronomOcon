@@ -64,11 +64,13 @@ fun AddIngredientDialog(
                             stringResource(R.string.search_fallback)
                         )
                     }
-                    OutlinedTextField(query, {
-                        query = it
-                    }, label = {
-                        Text(stringResource(R.string.ingredient_search_hint))
-                    }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text(stringResource(R.string.ingredient_search_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     TextButton(
                         onClick = {
                             searched = true

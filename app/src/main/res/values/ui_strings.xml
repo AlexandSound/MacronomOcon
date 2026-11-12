@@ -61,6 +61,7 @@
     <string name="comment_author_self">You</string>
     <string name="comment_author_other">Community cook</string>
     <string name="like_count">Like · %1$d</string>
+    <string name="liked_count">Liked · %1$d</string>
     <string name="delete_comment">Delete tip</string>
     <string name="profile_title">Make yourself\nat home.</string>
     <string name="profile_subtitle">Your kitchen, your preferences.</string>

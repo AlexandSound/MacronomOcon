@@ -15,7 +15,7 @@ Tables:
 - `recipe_bookmarks`: favorites/blocked flags and permitted recipe references.
 - `custom_recipes`: recipes authored by the user.
 
-All tables use Supabase Auth user IDs and enforce owner-only reads and writes for
+These initial tables use Supabase Auth user IDs and enforce owner-only reads and writes for
 authenticated clients. Anonymous access is revoked. Email/password and MFA belong
 to Supabase Auth, not these tables. No trigger is required to create a profile.
 
@@ -33,10 +33,53 @@ Do not reapply the initial migration to the hosted database. It is for reproduci
 the schema in a new environment. `config.toml` controls local development; it does
 not prove hosted Auth settings were changed.
 
+## Shared recipe comments
+
+Apply `migrations/20261112010000_recipe_comments.sql` to the hosted project before
+running the updated Android app. This is a new migration; do not rerun the initial
+migration. In the Supabase SQL Editor, run the complete contents of the new file
+once. For CLI deployment, reconcile the initial migration history as described
+above, inspect `supabase db push --dry-run`, then run `supabase db push`. If applying
+the comments migration manually, mark `20261112010000` applied before a later CLI push.
+
+- `comments` stores the recipe reference, author, display-name snapshot, text,
+  optional image URL, and server timestamp. Signed-in users can read all comments;
+  only the author can publish/delete their own. No client updates are allowed.
+- `comment_likes` stores one row per comment/user. RLS rejects impersonation and
+  self-likes; the composite primary key rejects duplicate likes. Deleting a comment
+  cascades to its likes. Anonymous clients cannot read or write either table.
+- The insert trigger reads the author's own profile under RLS. Clients cannot supply
+  author names, comment IDs, or timestamps. Missing names use the localized UI fallback.
+- Text, an image URL, or both satisfy the SRS content rule. Photo uploading, image
+  rendering, and storage-object cleanup remain the separate comment-photos task.
+- `SupabaseAccountRepository` (wired in `AuthAppContainer`) reads and writes these tables;
+  `AccountViewModel` keeps the loaded comments on the signed-in `User`. Sign-out does not
+  delete comments. Reopening a recipe reloads shared comments/likes;
+  this implementation does not subscribe to realtime updates.
+
+Recipe IDs reference the external recipe catalog, as bookmarks already do, rather
+than a local copy of provider recipes. Custom recipe deletion is not implemented;
+its future backend flow must also remove that recipe's comments to honor composition
+in the class diagram.
+
+Validation:
+
+1. Run the Android unit tests (including `CommentMapperTest`), debug build, and lint.
+2. On a disposable Supabase database with both migrations applied, execute
+   `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/comments_rls.sql`.
+   The script tests shared reads, ownership, spoofing, self-likes, duplicate likes,
+   empty content, image-only content, cascade deletion, and anonymous denial using
+   real database roles. All fixtures are rolled back. It requires a database admin
+   connection, not the app's publishable key.
+3. With accounts A and B, have A post a comment. Restart the app and open the same
+   recipe as B; verify A's comment is visible and B can like but cannot delete it.
+   Reopen as A; verify the like count, disabled self-like button, and deletion.
+   Reopen as B and verify the deleted comment is gone.
+
 ## Spoonacular Edge Function
 
 `functions/spoonacular/index.ts` is the only place the Spoonacular key is used. It requires a
-signed-in user's access token, forwards six allowlisted actions (`search`,
+signed-in user's access token and uses `routes.ts` (unit-tested by `routes_test.ts`) to forward six allowlisted actions (`search`,
 `findByIngredients`, `recipe`, `recipes` (bulk, up to 20 IDs), `ingredients`, `upc`) with
 bounded inputs and at most 10 results, and maps an exhausted daily quota (Spoonacular 402) to
 429. Responses are not stored server-side. The Android `SpoonacularApiClient` calls it through
@@ -66,14 +109,14 @@ Favorites and blocks use `recipe_bookmarks`; Spoonacular recipe IDs are stored, 
 
 Remaining integration:
 
-- Pantry and comments are in memory for the running app and start empty. Connect
-  `pantry_items` once meal deductions run atomically on the server, and add a comments table.
+- Pantry items persist to `pantry_items` through `SupabaseAccountRepository`. Recording a
+  meal writes each changed item separately; move deductions to an atomic server operation.
 - Barcode lookup uses Spoonacular's UPC endpoint and then ingredient search; Open Food Facts
   can replace or supplement it.
 - Spoonacular's free plan requires attribution; add it before publishing the app.
 - Test two separate accounts to confirm read/write isolation and account deletion.
 
-Only store user-authored pantry/custom recipe data here. This schema does not grant
+Only store user-authored pantry/custom recipe/comment data and permitted references here. This schema does not grant
 permission to retain restricted Spoonacular payloads or derived data.
 
 ## Android authentication
@@ -115,14 +158,14 @@ No Android OAuth client or SHA-1 fingerprint is needed for this browser flow. Fo
 the local stack, export `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and
 `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` before `supabase start`.
 
-This version does not handle password recovery,
+This version does not handle password recovery or
 MFA enrollment/challenges. Do not enable MFA for demo accounts
 until a challenge screen is implemented. Hosted Auth settings were not changed.
 
 The Supabase SDK restores and refreshes sessions. Session preferences are excluded
 from Android cloud backup and device transfer. Passwords are transient Compose state
 and are cleared on submission. Profile preferences use the protected `profiles` table.
-Food features still use the existing demo session, and the Profile screen says so.
+Pantry items use `pantry_items`; recipes use Spoonacular and comments use the shared Supabase tables.
 The default mock container remains available to previews and existing UI tests.
 
 Validation should include confirmation-required registration, invalid credentials,
@@ -140,17 +183,21 @@ supabase functions deploy delete-account --no-verify-jwt
 supabase functions deploy spoonacular --no-verify-jwt
 ```
 
-No database migration is needed for these cards. The hosted Edge runtime supplies
+These cards add no database migration, but the shared comments migration
+(`20261112010000_recipe_comments.sql`, above) must already be applied. The hosted Edge runtime supplies
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The admin key is
 read only by `delete-account`; never put it in Android configuration or commit a key.
 The existing `SPOONACULAR_API_KEY` secret is still needed by `spoonacular`.
 
 `delete-account` only accepts POST with a Bearer JWT, validates it with Auth's
 `getUser`, and deletes that verified user's ID with a separate admin client. A user ID
-in request JSON or the URL is never used. Auth deletion cascades to the four user tables.
+in request JSON or the URL is never used. Auth deletion cascades (`on delete cascade`) to
+`profiles`, `pantry_items`, `recipe_bookmarks`, `custom_recipes`, `comments`, and
+`comment_likes`; likes on the deleted user's comments cascade with those comments.
 On failure the app keeps the account and shows an error. After success, the SDK's
 persisted local session is cleared (no second network sign-out is required after
-removing the user), and the container clears local pantry/comment data.
+removing the user), and `AccountViewModel` resets its state, dropping the session's
+pantry and loaded comments. There is no local pantry/comment store to clear.
 
 Edit profile saves display name, diets/intolerances, cuisines and cooking methods.
 The current expiry reminder setting and recipe bookmarks are preserved. Preference
@@ -187,7 +234,7 @@ Android checks with the configured SDK/JDK:
 ```
 
 Use disposable accounts for the live test: cancel deletion and check nothing changes;
-then confirm deletion and check Auth Users plus all four tables for that user's ID.
+then confirm deletion and check Auth Users plus all six user tables for that user's ID.
 A second account's rows must remain. Verify failed/expired JWT requests return 401,
 profile/preferences survive app restart, changing diets/cuisines changes outgoing recipe
 filters, password changes permit signing in with the new password, and email changes

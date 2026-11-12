@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.macronomocon.R
@@ -30,7 +32,7 @@ import com.example.macronomocon.domain.model.Pantry
 import com.example.macronomocon.domain.model.PantryItem
 import com.example.macronomocon.domain.model.Recipe
 import com.example.macronomocon.domain.model.User
-import com.example.macronomocon.ui.comment.CommentState
+import com.example.macronomocon.ui.account.CommentState
 import com.example.macronomocon.ui.common.ViewState
 import com.example.macronomocon.ui.components.RecipeSymbol
 import com.example.macronomocon.ui.components.StateFeedback
@@ -60,13 +62,18 @@ fun RecipeDetailScreen(
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        item { RecipeSymbol(Modifier.fillMaxWidth().height(190.dp)) }
+        item {
+            RecipeSymbol(
+                recipe.imageUrl,
+                Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(16.dp))
+            )
+        }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(recipe.name, style = MaterialTheme.typography.headlineLarge)
                 Text(
                     stringResource(R.string.recipe_time, recipe.totalTime()),
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 TextButton(onClick = onFavorite, enabled = !busy && user != null) {
                     Text(
@@ -178,7 +185,7 @@ private fun InstructionStep(number: Int, instruction: String) {
         Text(
             stringResource(R.string.step_number, number),
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(instruction, style = MaterialTheme.typography.bodyLarge)
     }
@@ -194,7 +201,7 @@ private fun CommentRow(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            stringResource(
+            comment.authorName.takeIf { it.isNotBlank() } ?: stringResource(
                 if (comment.authorId ==
                     user?.userId
                 ) {
@@ -210,9 +217,21 @@ private fun CommentRow(
             TextButton(
                 onClick = { onLike(comment) },
                 enabled =
-                enabled && user != null && user.userId !in comment.likedByUserIds
+                enabled &&
+                    user != null &&
+                    !comment.isAuthor(user) &&
+                    user.userId !in comment.likedByUserIds
             ) {
-                Text(stringResource(R.string.like_count, comment.likeCount()))
+                Text(
+                    stringResource(
+                        if (user?.userId in comment.likedByUserIds) {
+                            R.string.liked_count
+                        } else {
+                            R.string.like_count
+                        },
+                        comment.likeCount()
+                    )
+                )
             }
             if (comment.authorId ==
                 user?.userId
