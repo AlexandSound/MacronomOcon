@@ -17,7 +17,7 @@ class CommentViewModel(private val repository: CommentRepository) :
     fun publishComment(text: String, imageUrl: String? = null) =
         action(UiMessage.ERROR_PUBLISH_THIS_COMMENT) {
             val recipeId = requireNotNull(data.recipeId)
-            require(text.isNotBlank())
+            require(text.isNotBlank() || !imageUrl.isNullOrBlank())
             val comment = repository.publish(recipeId, text.trim(), imageUrl)
             updateData { it.copy(comments = it.comments + comment) }
         }

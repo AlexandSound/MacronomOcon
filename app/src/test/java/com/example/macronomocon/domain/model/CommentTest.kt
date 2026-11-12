@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CommentTest {
+    @Test(expected = IllegalArgumentException::class)
+    fun authorCannotLikeOwnComment() {
+        val author = User("author", "author@example.com", "Author")
+        Comment("comment", "recipe", author.userId, "Helpful recipe").like(author)
+    }
+
     @Test
     fun sameUserCannotIncreaseLikeCountTwice() {
         val author = User("author", "author@example.com", "Author")

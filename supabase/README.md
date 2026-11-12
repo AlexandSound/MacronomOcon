@@ -15,7 +15,7 @@ Tables:
 - `recipe_bookmarks`: favorites/blocked flags and permitted recipe references.
 - `custom_recipes`: recipes authored by the user.
 
-All tables use Supabase Auth user IDs and enforce owner-only reads and writes for
+These initial tables use Supabase Auth user IDs and enforce owner-only reads and writes for
 authenticated clients. Anonymous access is revoked. Email/password and MFA belong
 to Supabase Auth, not these tables. No trigger is required to create a profile.
 
@@ -32,6 +32,48 @@ supabase db push --dry-run
 Do not reapply the initial migration to the hosted database. It is for reproducing
 the schema in a new environment. `config.toml` controls local development; it does
 not prove hosted Auth settings were changed.
+
+## Shared recipe comments
+
+Apply `migrations/20261112010000_recipe_comments.sql` to the hosted project before
+running the updated Android app. This is a new migration; do not rerun the initial
+migration. In the Supabase SQL Editor, run the complete contents of the new file
+once. For CLI deployment, reconcile the initial migration history as described
+above, inspect `supabase db push --dry-run`, then run `supabase db push`. If applying
+the comments migration manually, mark `20261112010000` applied before a later CLI push.
+
+- `comments` stores the recipe reference, author, display-name snapshot, text,
+  optional image URL, and server timestamp. Signed-in users can read all comments;
+  only the author can publish/delete their own. No client updates are allowed.
+- `comment_likes` stores one row per comment/user. RLS rejects impersonation and
+  self-likes; the composite primary key rejects duplicate likes. Deleting a comment
+  cascades to its likes. Anonymous clients cannot read or write either table.
+- The insert trigger reads the author's own profile under RLS. Clients cannot supply
+  author names, comment IDs, or timestamps. Missing names use the localized UI fallback.
+- Text, an image URL, or both satisfy the SRS content rule. Photo uploading, image
+  rendering, and storage-object cleanup remain the separate comment-photos task.
+- `SupabaseCommentRepository` replaces the local repository in `AuthAppContainer`.
+  Sign-out does not delete comments. Reopening a recipe reloads shared comments/likes;
+  this implementation does not subscribe to realtime updates.
+
+Recipe IDs reference the external recipe catalog, as bookmarks already do, rather
+than a local copy of provider recipes. Custom recipe deletion is not implemented;
+its future backend flow must also remove that recipe's comments to honor composition
+in the class diagram.
+
+Validation:
+
+1. Run the Android unit tests (including `CommentMapperTest`), debug build, and lint.
+2. On a disposable Supabase database with both migrations applied, execute
+   `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/comments_rls.sql`.
+   The script tests shared reads, ownership, spoofing, self-likes, duplicate likes,
+   empty content, image-only content, cascade deletion, and anonymous denial using
+   real database roles. All fixtures are rolled back. It requires a database admin
+   connection, not the app's publishable key.
+3. With accounts A and B, have A post a comment. Restart the app and open the same
+   recipe as B; verify A's comment is visible and B can like but cannot delete it.
+   Reopen as A; verify the like count, disabled self-like button, and deletion.
+   Reopen as B and verify the deleted comment is gone.
 
 ## Spoonacular Edge Function
 
@@ -66,14 +108,14 @@ Favorites and blocks use `recipe_bookmarks`; Spoonacular recipe IDs are stored, 
 
 Remaining integration:
 
-- Pantry and comments are in memory for the running app and start empty. Connect
-  `pantry_items` once meal deductions run atomically on the server, and add a comments table.
+- Pantry is in memory for the running app and starts empty. Connect
+  `pantry_items` once meal deductions run atomically on the server.
 - Barcode lookup uses Spoonacular's UPC endpoint and then ingredient search; Open Food Facts
   can replace or supplement it.
 - Spoonacular's free plan requires attribution; add it before publishing the app.
 - Test two separate accounts to confirm read/write isolation and account deletion.
 
-Only store user-authored pantry/custom recipe data here. This schema does not grant
+Only store user-authored pantry/custom recipe/comment data and permitted references here. This schema does not grant
 permission to retain restricted Spoonacular payloads or derived data.
 
 ## Android authentication
@@ -122,7 +164,7 @@ until a challenge screen is implemented. Hosted Auth settings were not changed.
 The Supabase SDK restores and refreshes sessions. Session preferences are excluded
 from Android cloud backup and device transfer. Passwords are transient Compose state
 and are cleared on submission. Profile preferences use the protected `profiles` table.
-Food features still use the existing demo session, and the Profile screen says so.
+Pantry remains local; recipes use Spoonacular and comments use the shared Supabase tables.
 The default mock container remains available to previews and existing UI tests.
 
 Validation should include confirmation-required registration, invalid credentials,

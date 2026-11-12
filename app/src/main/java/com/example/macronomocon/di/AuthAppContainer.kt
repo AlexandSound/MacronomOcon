@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import com.example.macronomocon.BuildConfig
 import com.example.macronomocon.data.api.CachingRecipeApiClient
-import com.example.macronomocon.data.local.LocalCommentRepository
 import com.example.macronomocon.data.local.LocalPantryRepository
 import com.example.macronomocon.data.repository.AccountRepository
 import com.example.macronomocon.data.repository.CommentRepository
@@ -15,8 +14,8 @@ import com.example.macronomocon.data.scanner.BarcodeScanner
 import com.example.macronomocon.data.scanner.GoogleCodeScanner
 import com.example.macronomocon.data.supabase.SpoonacularApiClient
 import com.example.macronomocon.data.supabase.SupabaseAccountRepository
+import com.example.macronomocon.data.supabase.SupabaseCommentRepository
 import com.example.macronomocon.data.supabase.SupabaseRecipeUserData
-import com.example.macronomocon.domain.model.User
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.ExternalAuthAction
 import io.github.jan.supabase.auth.FlowType
@@ -28,8 +27,8 @@ import io.github.jan.supabase.postgrest.Postgrest
 
 /**
  * Production composition root: Supabase accounts and bookmarks, Spoonacular recipes and
- * ingredients through the `spoonacular` Edge Function, and Google's barcode scanner. Pantry and
- * comments stay in memory until their server tables are connected.
+ * ingredients through the `spoonacular` Edge Function, shared Supabase comments, and Google's
+ * barcode scanner. Pantry stays in memory until its server table is connected.
  */
 class AuthAppContainer(private val context: Context) : AppContainer {
     override val liveAuth = true
@@ -57,9 +56,6 @@ class AuthAppContainer(private val context: Context) : AppContainer {
 
     // Scoped to the signed-in user and cleared on sign-out, so accounts never share local data.
     private val localPantry = LocalPantryRepository { client.auth.currentUserOrNull()?.id }
-    private val localComments = LocalCommentRepository {
-        client.auth.currentUserOrNull()?.let { User(it.id, it.email.orEmpty(), it.email.orEmpty()) }
-    }
 
     override val accounts: AccountRepository by lazy {
         val remote = SupabaseAccountRepository(client)
@@ -69,7 +65,6 @@ class AuthAppContainer(private val context: Context) : AppContainer {
                     remote.signOut()
                 } finally {
                     localPantry.clear()
-                    localComments.clear()
                 }
             }
         }
@@ -79,7 +74,7 @@ class AuthAppContainer(private val context: Context) : AppContainer {
         RecipeRepository(CachingRecipeApiClient(spoonacular), SupabaseRecipeUserData(client))
     }
     override val pantry: PantryRepository = localPantry
-    override val comments: CommentRepository = localComments
+    override val comments: CommentRepository by lazy { SupabaseCommentRepository(client) }
 
     override fun barcodeScanner(): BarcodeScanner = GoogleCodeScanner(context)
 
