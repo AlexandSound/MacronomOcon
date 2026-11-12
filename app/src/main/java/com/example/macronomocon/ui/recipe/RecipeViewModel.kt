@@ -72,9 +72,21 @@ class RecipeViewModel(private val repository: RecipeRepository) :
         }
     }
 
+    fun loadCustom() = action(UiMessage.ERROR_RETRIEVE_RECIPES) {
+        allRecipes = repository.customRecipes()
+        updateData { it.copy(recipes = allRecipes) }
+    }
+
     fun saveCustomRecipe(recipe: Recipe) = action(UiMessage.ERROR_SAVE_THIS_RECIPE) {
         val saved = repository.saveCustom(recipe)
         updateData { it.copy(selectedRecipe = saved) }
+    }
+
+    fun updateCustomRecipe(recipe: Recipe) = action(UiMessage.ERROR_SAVE_THIS_RECIPE) {
+        val saved = repository.updateCustom(recipe)
+        fun List<Recipe>.replaced() = map { if (it.recipeId == saved.recipeId) saved else it }
+        allRecipes = allRecipes.replaced()
+        updateData { it.copy(recipes = it.recipes.replaced(), selectedRecipe = saved) }
     }
 
     fun shareRecipe(recipe: Recipe) = action(UiMessage.ERROR_SHARE_THIS_RECIPE) {

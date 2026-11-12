@@ -124,6 +124,18 @@ class MockAppContainer @VisibleForTesting internal constructor(private val seed:
                 user = requireNotNull(user).block(requireNotNull(catalog[recipeId]))
             }
             override suspend fun saveCustom(recipe: Recipe): Recipe = lock.withLock {
+                val saved = recipe.copy(recipeId = UUID.randomUUID().toString())
+                catalog[saved.recipeId] = saved
+                saved
+            }
+            override suspend fun customRecipes(): List<Recipe> = lock.withLock {
+                catalog.values.filter { it.isCustom() }.reversed()
+            }
+            override suspend fun findCustom(recipeId: String): Recipe = lock.withLock {
+                requireNotNull(catalog[recipeId]?.takeIf { it.isCustom() })
+            }
+            override suspend fun updateCustom(recipe: Recipe): Recipe = lock.withLock {
+                require(catalog[recipe.recipeId]?.isCustom() == true)
                 catalog[recipe.recipeId] = recipe
                 recipe
             }

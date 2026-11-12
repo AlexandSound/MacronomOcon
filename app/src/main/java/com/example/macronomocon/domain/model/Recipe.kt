@@ -15,6 +15,13 @@ data class Recipe(
     companion object {
         /** Recipes with a total time under this many minutes count as quick. */
         const val QUICK_MAX_MINUTES = 20
+
+        // Postgres generates UUIDs for custom recipes; provider recipes keep their own IDs.
+        private val CUSTOM_ID = Regex(
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        )
+
+        fun isCustomId(recipeId: String): Boolean = CUSTOM_ID.matches(recipeId)
     }
 
     init {
@@ -35,7 +42,10 @@ data class Recipe(
 
     fun isQuick(): Boolean = totalTime() < QUICK_MAX_MINUTES
 
-    fun hasRequiredInfo(): Boolean = recipeId.isNotBlank() &&
+    fun isCustom(): Boolean = isCustomId(recipeId)
+
+    /** A [new] recipe has no ID until the backend assigns one on insert. */
+    fun hasRequiredInfo(new: Boolean = false): Boolean = (new || recipeId.isNotBlank()) &&
         name.isNotBlank() &&
         instructions.isNotEmpty() &&
         instructions.all { it.isNotBlank() } &&

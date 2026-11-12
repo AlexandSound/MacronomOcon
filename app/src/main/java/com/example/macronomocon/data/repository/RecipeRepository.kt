@@ -23,18 +23,38 @@ class RecipeRepository(
         )
     }
 
-    suspend fun findById(recipeId: String): Recipe = api.getRecipe(recipeId)
+    suspend fun findById(recipeId: String): Recipe = if (Recipe.isCustomId(recipeId)) {
+        userData.findCustom(recipeId)
+    } else {
+        api.getRecipe(recipeId)
+    }
 
-    suspend fun findByIds(recipeIds: Set<String>): List<Recipe> =
-        if (recipeIds.isEmpty()) emptyList() else api.getRecipes(recipeIds.toList())
+    /** Custom recipes come from the user's own table; the rest from the recipe API. */
+    suspend fun findByIds(recipeIds: Set<String>): List<Recipe> {
+        val (custom, provider) = recipeIds.partition { Recipe.isCustomId(it) }
+        val own = if (custom.isEmpty()) {
+            emptyList()
+        } else {
+            userData.customRecipes().filter { it.recipeId in custom }
+        }
+        return own + if (provider.isEmpty()) emptyList() else api.getRecipes(provider)
+    }
+
+    suspend fun customRecipes(): List<Recipe> = userData.customRecipes()
 
     suspend fun setFavorite(r: Recipe, value: Boolean) = userData.setFavorite(r.recipeId, value)
 
     suspend fun blockRecipe(r: Recipe) = userData.blockRecipe(r.recipeId)
 
     suspend fun saveCustom(r: Recipe): Recipe {
-        require(r.hasRequiredInfo()) { "Recipe information is incomplete" }
+        require(r.hasRequiredInfo(new = true)) { "Recipe information is incomplete" }
         return userData.saveCustom(r)
+    }
+
+    suspend fun updateCustom(r: Recipe): Recipe {
+        require(r.isCustom()) { "Only custom recipes can be edited" }
+        require(r.hasRequiredInfo()) { "Recipe information is incomplete" }
+        return userData.updateCustom(r)
     }
 
     suspend fun createShareLink(r: Recipe): String = userData.createShareLink(r.recipeId)

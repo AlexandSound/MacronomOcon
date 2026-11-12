@@ -5,16 +5,18 @@ import com.example.macronomocon.domain.model.Recipe
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Favorites and blocks in the owner-only `recipe_bookmarks` table. */
+/** Favorites and blocks in `recipe_bookmarks`; user-authored recipes in `custom_recipes`. Both are owner-only. */
 class SupabaseRecipeUserData(private val client: SupabaseClient) : RecipeUserDataSource {
     companion object {
         const val TABLE = "recipe_bookmarks"
+        const val CUSTOM_TABLE = "custom_recipes"
     }
 
     override suspend fun blockedRecipeIds(): Set<String> = bookmarkIds(client, "blocked")
@@ -24,10 +26,31 @@ class SupabaseRecipeUserData(private val client: SupabaseClient) : RecipeUserDat
 
     override suspend fun blockRecipe(recipeId: String) = upsert(recipeId) { put("blocked", true) }
 
-    // Not exposed in the UI yet; custom_recipes and share links need their own flows.
-    override suspend fun saveCustom(recipe: Recipe): Recipe =
-        error("Custom recipes are not available yet")
+    // Postgres assigns recipe_id and user_id; returning the row gives the new ID back.
+    override suspend fun saveCustom(recipe: Recipe): Recipe = CustomRecipeMapper.recipe(
+        client.from(CUSTOM_TABLE).insert(CustomRecipeMapper.row(recipe)) { select() }
+            .decodeSingle<JsonObject>()
+    )
 
+    // RLS limits every custom_recipes query to the signed-in user's rows.
+    override suspend fun customRecipes(): List<Recipe> = client.from(CUSTOM_TABLE).select {
+        order("created_at", Order.DESCENDING)
+    }.decodeList<JsonObject>().map(CustomRecipeMapper::recipe)
+
+    override suspend fun findCustom(recipeId: String): Recipe = CustomRecipeMapper.recipe(
+        client.from(CUSTOM_TABLE).select { filter { eq("recipe_id", recipeId) } }
+            .decodeSingle<JsonObject>()
+    )
+
+    // Fails when no row matched, so editing someone else's recipe is reported, not ignored.
+    override suspend fun updateCustom(recipe: Recipe): Recipe = CustomRecipeMapper.recipe(
+        client.from(CUSTOM_TABLE).update(CustomRecipeMapper.row(recipe)) {
+            select()
+            filter { eq("recipe_id", recipe.recipeId) }
+        }.decodeSingle<JsonObject>()
+    )
+
+    // Not exposed in the UI yet; share links need their own flow.
     override suspend fun createShareLink(recipeId: String): String =
         error("Recipe sharing is not available yet")
 
